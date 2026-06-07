@@ -271,6 +271,8 @@ body {
 .auth-toggle { margin-top: 14px; font-size: 13px; color: var(--cool); cursor: pointer; }
 .auth-toggle:hover { text-decoration: underline; }
 .auth-err { color: #ffb0b0; font-size: 13px; margin-top: 12px; min-height: 16px; }
+.set-sub { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t60); margin: 16px 0 8px; }
+select.modal-input { appearance: none; -webkit-appearance: none; }
 .drawer-signout { width: 100%; background: transparent; border: 1px solid var(--t45); border-radius: 10px; padding: 9px; color: var(--t60); font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
 .drawer-signout:hover { border-color: #fff; color: #fff; }
 
@@ -355,6 +357,10 @@ body {
     <button class="drawer-add" onclick="openModal()">
       <svg style="width:14px;height:14px" stroke="currentColor"><use href="#ic-plus"/></svg>
       Add location
+    </button>
+    <button class="drawer-add" onclick="openSettings()" style="margin-top:8px">
+      <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings &amp; stations
     </button>
     <button class="drawer-signout" id="signOutBtn" onclick="logout()" style="display:none;margin-top:10px">Sign out</button>
     <div style="text-align:center;font-size:10px;color:var(--t45);margin-top:10px" id="buildTag">—</div>
@@ -610,6 +616,27 @@ body {
   </div>
 </div>
 
+<!-- Settings / Stations Modal -->
+<div class="modal-overlay" id="settingsOverlay" onclick="settingsBg(event)">
+  <div class="modal">
+    <div class="modal-title">Weather Stations <button class="modal-close" onclick="closeSettings()">✕</button></div>
+    <div id="stationList" class="modal-results" style="max-height:180px"></div>
+    <div class="set-sub">Add a station</div>
+    <select class="modal-input" id="stProvider" style="width:100%;margin-bottom:10px">
+      <option value="ecowitt">Ecowitt</option>
+      <option value="" disabled>WeatherFlow Tempest — coming soon</option>
+      <option value="" disabled>Davis / others — coming soon</option>
+    </select>
+    <input class="modal-input" id="stName" placeholder="Station name (e.g. Home)" style="width:100%;margin-bottom:8px">
+    <input class="modal-input" id="stApp" placeholder="Application key" autocapitalize="off" spellcheck="false" style="width:100%;margin-bottom:8px">
+    <input class="modal-input" id="stApi" placeholder="API key" autocapitalize="off" spellcheck="false" style="width:100%;margin-bottom:8px">
+    <input class="modal-input" id="stMac" placeholder="MAC address (e.g. AB:CD:EF:…)" autocapitalize="off" spellcheck="false" style="width:100%;margin-bottom:10px">
+    <button class="modal-go" id="stAddBtn" onclick="addStation()" style="width:100%">Validate &amp; add station</button>
+    <div class="auth-err" id="stErr" style="text-align:center"></div>
+    <div class="modal-note" style="text-align:left">Find your keys in the Ecowitt web dashboard: <b>Profile → My Application Keys / Devices</b>. We validate them and read the station's location automatically.</div>
+  </div>
+</div>
+
 <script src="vendor/supabase.js"></script>
 <script>
 // ── Config ──
@@ -621,19 +648,17 @@ const HOME_LAT=52.7868543, HOME_LON=-1.1251226;
 const SUPABASE_URL='https://xysslvzlmpgmseimqito.supabase.co';
 const SUPABASE_ANON='sb_publishable_V8cr4rmElEYqHJZ9OAXQDw_Uw9r0tLs';
 
-const HOME_LOC={key:'home',lat:HOME_LAT,lon:HOME_LON,name:'Home',sub:'Burton-on-the-Wolds · Live station',top:'Home — Burton-on-the-Wolds',fixed:true};
-const HOME_RADIUS_KM=4; // inside this radius of home → use the live station, not the forecast API
+// Built-in home station (legacy; treated as just another station). Removed in a later stage.
+const HOME_LOC={key:'home',lat:HOME_LAT,lon:HOME_LON,name:'Home',sub:'Burton-on-the-Wolds · Live station',top:'Home — Burton-on-the-Wolds',isStation:true,creds:{app_key:APP_KEY,api_key:ECOWITT_KEY,mac:MAC}};
+const NEAR_STATION_KM=4; // current location within this of one of your stations → show that live station
 let currentGeoLoc=null;  // resolved geolocation result, behaves as the 'current' location
+let userStations=[];     // the signed-in user's weather stations (loaded from the DB)
 function haversineKm(la1,lo1,la2,lo2){ const R=6371,r=Math.PI/180; const dLa=(la2-la1)*r,dLo=(lo2-lo1)*r; const a=Math.sin(dLa/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(a)); }
 function loadLocs(){ try{return JSON.parse(localStorage.getItem('wxLocs')||'[]')}catch(e){return[]} }
 function saveLocs(l){ localStorage.setItem('wxLocs',JSON.stringify(l.filter(x=>!x.fixed))) }
-let userLocs=loadLocs();
-if(!userLocs.length){ userLocs=[
-  {key:'loughborough',lat:52.7722,lon:-1.2037,name:'Loughborough',sub:'LE12, England',top:'Loughborough'},
-  {key:'london',lat:51.5074,lon:-0.1278,name:'London',sub:'England, UK',top:'London'},
-  {key:'vilamoura',lat:37.0735,lon:-8.1219,name:'Vilamoura',sub:'Algarve, Portugal',top:'Vilamoura'},
-]; saveLocs(userLocs); }
-function allLocs(){ return [HOME_LOC,...userLocs]; }
+let userLocs=loadLocs(); // favourites cache for instant paint; replaced from the DB after login
+function allStations(){ return [HOME_LOC, ...userStations]; }
+function allLocs(){ return [...allStations(), ...userLocs]; }
 // Push saved favourites into the DB so the 30-min logger (and history) tracks them too.
 async function syncLocations(){
   if(!SUPABASE_URL||!SUPABASE_ANON||!userLocs.length) return;
@@ -696,8 +721,26 @@ async function loadUserLocs(){
 async function dbAddUserLoc(l){ if(!sb||!_uid) return; try{ await sb.from('user_locations').upsert({user_id:_uid,location_key:l.key,name:l.name,sub:l.sub||null,lat:l.lat,lon:l.lon},{onConflict:'user_id,location_key'}); }catch(e){} }
 async function dbRemoveUserLoc(key){ if(!sb) return; try{ await sb.from('user_locations').delete().eq('location_key',key); }catch(e){} }
 
+// per-user weather stations (cross-device; creds RLS-protected to the owner)
+function mapStationRow(r){ return {key:r.station_key,name:r.name,sub:'Live station',lat:r.lat,lon:r.lon,top:r.name,isStation:true,provider:r.provider,creds:{app_key:r.app_key,api_key:r.api_key,mac:r.mac}}; }
+async function loadUserStations(){
+  if(!sb) return [];
+  const {data,error}=await sb.from('user_stations').select('station_key,provider,name,lat,lon,app_key,api_key,mac').order('created_at');
+  if(error||!Array.isArray(data)) return [];
+  return data.map(mapStationRow);
+}
+async function dbAddUserStation(st){
+  if(!sb||!_uid) return null;
+  const {data,error}=await sb.from('user_stations')
+    .insert({user_id:_uid,provider:st.provider||'ecowitt',name:st.name,app_key:st.app_key,api_key:st.api_key,mac:st.mac,lat:st.lat,lon:st.lon})
+    .select('station_key,provider,name,lat,lon,app_key,api_key,mac').single();
+  if(error||!data){ throw new Error(error?.message||'Could not save station'); }
+  return mapStationRow(data);
+}
+async function dbRemoveUserStation(key){ if(!sb) return; try{ await sb.from('user_stations').delete().eq('station_key',key); }catch(e){} }
+
 let currentLoc='home';
-function isHomeView(){ return currentLoc==='home' || (currentLoc==='current' && currentGeoLoc && currentGeoLoc.atHome); }
+function isStationView(){ const l=locByKey(currentLoc); return !!(l&&l.isStation) || (currentLoc==='current'&&currentGeoLoc&&currentGeoLoc.nearStationKey); }
 let mapLayer='wind';
 let tHigh=null,tLow=null;
 
@@ -725,9 +768,10 @@ function wmoLabel(c){ if(c===0)return'Clear sky';if(c<=2)return'Partly cloudy';i
 function uvDesc(u){ if(u<=2)return'Low';if(u<=5)return'Moderate';if(u<=7)return'High';if(u<=10)return'Very High';return'Extreme'; }
 function aqiDesc(a){ if(a<=20)return'Good';if(a<=40)return'Fair';if(a<=60)return'Moderate';if(a<=80)return'Poor';if(a<=100)return'Very Poor';return'Extremely Poor'; }
 function soilDesc(m){ if(m<10)return'Very dry';if(m<25)return'Dry';if(m<45)return'Moist';if(m<70)return'Well watered';return'Saturated'; }
-function setHomeCards(show){ ['indoorCard','stationCard','soilCard'].forEach(id=>{const e=$(id); if(e)e.style.display=show?'flex':'none';}); const rb=$('rainBreakdown'); if(rb)rb.style.display=show?'grid':'none'; }
+function setStationCards(show){ ['indoorCard','stationCard','soilCard'].forEach(id=>{const e=$(id); if(e)e.style.display=show?'flex':'none';}); const rb=$('rainBreakdown'); if(rb)rb.style.display=show?'grid':'none'; }
 
 function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function setT(id,v){ const e=$(id); if(e)e.textContent=v; }
 function setIcon(el,id){ if(!el)return; const u=el.querySelector('use'); if(u)u.setAttribute('href','#'+id); }
 
@@ -742,17 +786,20 @@ function renderDrawer(){
     <div class="dloc-info"><div class="dloc-name">Current Location</div><div class="dloc-sub">${currentGeoLoc?currentGeoLoc.sub:'Tap to detect'}</div></div>
     <div class="dloc-temp" id="dt_current">${currentGeoLoc?'--°':'›'}</div>
   </div>
-  <div class="drawer-sect">My Station</div>
-  <div class="dloc ${currentLoc==='home'?'active':''}" onclick="pickLoc('home')">
-    <svg class="dloc-icon" stroke="currentColor"><use href="#ic-home"/></svg>
-    <div class="dloc-info"><div class="dloc-name">Home</div><div class="dloc-sub">Burton-on-the-Wolds</div></div>
-    <div class="dloc-temp" id="dt_home">--°</div>
-  </div>
-  <div class="drawer-sect">Favourites</div>`;
+  <div class="drawer-sect">My Stations</div>`;
+  allStations().forEach(s=>{
+    h+=`<div class="dloc ${currentLoc===s.key?'active':''}" onclick="pickLoc('${s.key}')">
+      <svg class="dloc-icon" stroke="currentColor"><use href="#ic-home"/></svg>
+      <div class="dloc-info"><div class="dloc-name">${esc(s.name)}</div><div class="dloc-sub">${esc(s.sub||'Live station')}</div></div>
+      <div class="dloc-temp" id="dt_${s.key}">--°</div>
+      ${s.key==='home'?'':`<button class="dloc-remove" onclick="removeStation(event,'${s.key}')">✕</button>`}
+    </div>`;
+  });
+  h+=`<div class="drawer-sect">Favourites</div>`;
   userLocs.forEach(l=>{
     h+=`<div class="dloc ${currentLoc===l.key?'active':''}" onclick="pickLoc('${l.key}')">
       <svg class="dloc-icon" stroke="currentColor"><use href="#ic-pin"/></svg>
-      <div class="dloc-info"><div class="dloc-name">${l.name}</div><div class="dloc-sub">${l.sub}</div></div>
+      <div class="dloc-info"><div class="dloc-name">${esc(l.name)}</div><div class="dloc-sub">${esc(l.sub)}</div></div>
       <div class="dloc-temp" id="dt_${l.key}">--°</div>
       <button class="dloc-remove" onclick="removeLoc(event,'${l.key}')">✕</button>
     </div>`;
@@ -762,24 +809,40 @@ function renderDrawer(){
 
 function pickLoc(key){
   currentLoc=key;
+  tHigh=null; tLow=null; // running H/L is per-view; don't leak between stations
   closeDrawer();
-  const loc=locByKey(key);
-  setT('topLoc',loc.top); setT('topSub',loc.sub);
-  setT('heroTag',key==='home'?'HOME':loc.name.toUpperCase());
-  setHomeCards(key==='home');
+  const loc=locByKey(key); if(!loc) return;
+  setT('topLoc',loc.top||loc.name); setT('topSub',loc.sub||'');
+  setT('heroTag',(loc.name||'').toUpperCase());
+  setStationCards(!!loc.isStation);
   renderDrawer();
   updateMap(loc.lat,loc.lon);
   fetchAll();
   resetHistLocs(); renderHistLocs(); fetchHistory();
 }
 
+// Pick the sensible default view: the user's own first station, else built-in home.
+function defaultView(){ if(userStations.length) return pickLoc(userStations[0].key); return pickLoc('home'); }
+
 function removeLoc(e,key){
   e.stopPropagation();
   userLocs=userLocs.filter(l=>l.key!==key);
   saveLocs(userLocs); dbRemoveUserLoc(key);
-  if(currentLoc===key) pickLoc('home');
+  if(currentLoc===key) defaultView();
   else {
     renderDrawer(); fetchSidebar();
+    if(histLocsSel.has(key)){ histLocsSel.delete(key); if(!histLocsSel.size) resetHistLocs(); fetchHistory(); }
+    renderHistLocs();
+  }
+}
+
+function removeStation(e,key){
+  e.stopPropagation();
+  userStations=userStations.filter(s=>s.key!==key);
+  dbRemoveUserStation(key);
+  if(currentLoc===key) defaultView();
+  else {
+    renderDrawer();
     if(histLocsSel.has(key)){ histLocsSel.delete(key); if(!histLocsSel.size) resetHistLocs(); fetchHistory(); }
     renderHistLocs();
   }
@@ -798,9 +861,11 @@ function pickCurrent(){
 async function onGeo(pos){
   if(currentLoc!=='current') return; // user switched away while we waited
   const lat=pos.coords.latitude, lon=pos.coords.longitude;
-  if(haversineKm(lat,lon,HOME_LAT,HOME_LON)<=HOME_RADIUS_KM){
-    // near home → use the live station instead of the forecast API
-    currentGeoLoc={key:'current',lat:HOME_LAT,lon:HOME_LON,name:'Home',sub:'At home · Live station',top:'Home — Burton-on-the-Wolds',atHome:true};
+  // near one of your stations → show that live station instead of the forecast API
+  let near=null,best=Infinity;
+  for(const s of allStations()){ if(s.lat==null) continue; const d=haversineKm(lat,lon,s.lat,s.lon); if(d<=NEAR_STATION_KM&&d<best){ best=d; near=s; } }
+  if(near){
+    currentGeoLoc={key:'current',lat:near.lat,lon:near.lon,name:near.name,sub:'At '+near.name+' · Live',top:near.name,nearStationKey:near.key};
   } else {
     let name='Current Location', sub='Your location';
     try{
@@ -808,7 +873,7 @@ async function onGeo(pos){
       name=g.city||g.locality||g.principalSubdivision||'Current Location';
       sub=[g.principalSubdivision,g.countryName].filter(Boolean).join(', ')||'Your location';
     }catch(e){}
-    currentGeoLoc={key:'current',lat,lon,name,sub,top:name,atHome:false};
+    currentGeoLoc={key:'current',lat,lon,name,sub,top:name,nearStationKey:null};
   }
   applyCurrentView();
 }
@@ -817,18 +882,57 @@ function onGeoErr(err){
   currentGeoLoc=null;
   const msg = err.code===1?'Location permission denied.':err.code===3?'Location request timed out.':'Could not get your location.';
   setT('topLoc','Current Location'); setT('topSub',msg);
-  showErr(msg+' Showing Home instead.');
-  setTimeout(()=>pickLoc('home'),1400);
+  showErr(msg);
+  defaultView(true); // fall back without re-prompting geolocation
 }
 function applyCurrentView(){
-  const loc=currentGeoLoc, home=loc.atHome;
-  setT('topLoc', home?'Home — Burton-on-the-Wolds':loc.top); setT('topSub',loc.sub);
-  setT('heroTag', home?'HOME':(loc.name||'Current').toUpperCase());
-  setHomeCards(home);
+  tHigh=null; tLow=null;
+  const loc=currentGeoLoc, st=loc.nearStationKey;
+  setT('topLoc', loc.top||loc.name); setT('topSub',loc.sub);
+  setT('heroTag', (loc.name||'Current').toUpperCase());
+  setStationCards(!!st);
   renderDrawer();
   updateMap(loc.lat,loc.lon);
   fetchAll();
   resetHistLocs(); renderHistLocs(); fetchHistory();
+}
+
+// ── Settings / stations ──
+function openSettings(){ closeDrawer(); $('stErr').textContent=''; $('stErr').style.color=''; $('stName').value=$('stApp').value=$('stApi').value=$('stMac').value=''; renderStationList(); $('settingsOverlay').classList.add('open'); }
+function closeSettings(){ $('settingsOverlay').classList.remove('open'); }
+function settingsBg(e){ if(e.target===$('settingsOverlay')) closeSettings(); }
+function renderStationList(){
+  const el=$('stationList'); if(!el) return;
+  if(!userStations.length){ el.innerHTML='<div class="modal-note">No stations added yet.</div>'; return; }
+  el.innerHTML=userStations.map(s=>`<div class="mres"><div><div class="mres-name">${esc(s.name)}</div><div class="mres-sub">${esc(s.provider||'ecowitt')} · ${esc(s.creds.mac)}</div></div><button class="mres-add" onclick="removeStationFromSettings('${s.key}')">Remove</button></div>`).join('');
+}
+function removeStationFromSettings(key){ removeStation({stopPropagation(){}}, key); renderStationList(); }
+async function addStation(){
+  const provider=$('stProvider').value||'ecowitt';
+  const name=$('stName').value.trim(), app_key=$('stApp').value.trim(), api_key=$('stApi').value.trim(), mac=$('stMac').value.trim();
+  const err=$('stErr'), btn=$('stAddBtn'); err.style.color='';
+  if(!name||!app_key||!api_key||!mac){ err.textContent='Fill in name, application key, API key and MAC.'; return; }
+  if(allStations().some(s=>s.creds&&s.creds.mac&&s.creds.mac.toLowerCase()===mac.toLowerCase())){ err.textContent='That station is already added.'; return; }
+  btn.disabled=true; err.textContent='Validating with Ecowitt…';
+  try{
+    const info=await(await fetch(`https://api.ecowitt.net/api/v3/device/info?application_key=${encodeURIComponent(app_key)}&api_key=${encodeURIComponent(api_key)}&mac=${encodeURIComponent(mac)}`)).json();
+    if(info.code!==0) throw new Error(info.msg||'Ecowitt rejected those details — check your keys and MAC.');
+    let lat=parseFloat(info.data?.latitude), lon=parseFloat(info.data?.longitude);
+    if(isNaN(lat)||isNaN(lon)){ // device/info had no coords — try the browser's location
+      try{ const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000})); lat=pos.coords.latitude; lon=pos.coords.longitude; }catch(_){ lat=NaN; lon=NaN; }
+    }
+    const st=await dbAddUserStation({provider,name,app_key,api_key,mac,lat:isNaN(lat)?null:lat,lon:isNaN(lon)?null:lon});
+    if(!st) throw new Error('Could not save station.');
+    userStations.push(st);
+    $('stName').value=$('stApp').value=$('stApi').value=$('stMac').value='';
+    renderStationList(); renderDrawer();
+    closeSettings(); pickLoc(st.key);
+  }catch(e){
+    const m=String(e.message||'');
+    err.textContent = /user_stations|relation|schema cache|PGRST205|42P01/i.test(m)
+      ? 'Station storage isn’t set up yet — please try again shortly.' : (m||'Failed to add station.');
+  }
+  finally{ btn.disabled=false; }
 }
 
 // ── Modal ──
@@ -845,7 +949,7 @@ async function doSearch(){
       const sub=[x.admin1,x.country].filter(Boolean).join(', ');
       const key='loc_'+x.id;
       const has=allLocs().some(l=>l.key===key);
-      return `<div class="mres"><div><div class="mres-name">${x.name}</div><div class="mres-sub">${sub}</div></div>${has?'<span style="font-size:11px;opacity:0.5">Added</span>':`<button class="mres-add" onclick="addLoc(${x.latitude},${x.longitude},'${x.name.replace(/'/g,"\\'")}','${sub.replace(/'/g,"\\'")}','${key}')">+ Add</button>`}</div>`;
+      return `<div class="mres"><div><div class="mres-name">${esc(x.name)}</div><div class="mres-sub">${esc(sub)}</div></div>${has?'<span style="font-size:11px;opacity:0.5">Added</span>':`<button class="mres-add" onclick="addLoc(${x.latitude},${x.longitude},'${x.name.replace(/'/g,"\\'")}','${sub.replace(/'/g,"\\'")}','${key}')">+ Add</button>`}</div>`;
     }).join('');
   }catch(e){ r.innerHTML='<div class="modal-note">Search failed</div>'; }
 }
@@ -859,6 +963,7 @@ function addLoc(lat,lon,name,sub,key){
 
 // ── Map ──
 function updateMap(lat,lon){
+  if(lat==null||lon==null) return; // station without known coords — leave the map as-is
   const overlayMap={wind:'wind',temp:'temp',rain:'rain',clouds:'clouds',pressure:'pressure'};
   const ov=overlayMap[mapLayer]||'wind';
   $('mapFrame').src=`https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&zoom=7&level=surface&overlay=${ov}&menu=&message=&marker=true&calendar=&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=%C2%B0C&radarRange=-1`;
@@ -871,10 +976,11 @@ function setMapLayer(layer,btn){
   if(loc) updateMap(loc.lat,loc.lon);
 }
 
-// ── Ecowitt station ──
-async function fetchStation(){
+// ── Ecowitt station (creds = {app_key,api_key,mac}; key = drawer row to update) ──
+async function fetchStation(creds,key){
   try{
-    const url=`https://api.ecowitt.net/api/v3/device/real_time?application_key=${APP_KEY}&api_key=${ECOWITT_KEY}&mac=${MAC}&call_back=all&temp_unitid=1&pressure_unitid=3&wind_speed_unitid=7&rainfall_unitid=12&solar_irradiance_unitid=16`;
+    if(!creds||!creds.app_key) throw new Error('No station credentials');
+    const url=`https://api.ecowitt.net/api/v3/device/real_time?application_key=${creds.app_key}&api_key=${creds.api_key}&mac=${creds.mac}&call_back=all&temp_unitid=1&pressure_unitid=3&wind_speed_unitid=7&rainfall_unitid=12&solar_irradiance_unitid=16`;
     const j=await(await fetch(url)).json();
     if(j.code!==0)throw new Error(j.msg||'Station error');
     const d=j.data;
@@ -949,20 +1055,22 @@ async function fetchStation(){
     setT('battVal',batt?batt+'V':'OK'); setT('solarVal',solar.toFixed(0)+' W/m²');
     setT('capVal',cap?cap+'V':'—'); setT('soilBatt',sbatt?sbatt+'V':'—');
 
-    // sidebar
-    const dh=$('dt_home'); if(dh){ dh.textContent=temp.toFixed(0)+'°'; dh.style.color=tColor(temp); }
-    const dc=$('dt_current'); if(dc&&isHomeView()){ dc.textContent=temp.toFixed(0)+'°'; dc.style.color=tColor(temp); }
+    // sidebar (this station's drawer row + the Current row when viewing it)
+    if(key){ const dk=$('dt_'+key); if(dk){ dk.textContent=temp.toFixed(0)+'°'; dk.style.color=tColor(temp); } }
+    const dc=$('dt_current'); if(dc&&currentLoc==='current'){ dc.textContent=temp.toFixed(0)+'°'; dc.style.color=tColor(temp); }
     setT('liveTime',new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
   }catch(e){ $('err').textContent='Station: '+e.message; $('err').classList.add('show'); }
 }
 
 // ── Pressure trend (Ecowitt history, last ~3h) ──
-async function fetchPressureTrend(){
+async function fetchPressureTrend(creds){
+  setT('presTrend','—'); // neutral until we have ≥2 history points for this station
   try{
+    if(!creds||!creds.app_key) return;
     const pad=n=>String(n).padStart(2,'0');
     const fmt=dt=>`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}%20${pad(dt.getHours())}:${pad(dt.getMinutes())}:00`;
     const now=new Date(), start=new Date(now.getTime()-6*3600000);
-    const url=`https://api.ecowitt.net/api/v3/device/history?application_key=${APP_KEY}&api_key=${ECOWITT_KEY}&mac=${MAC}&start_date=${fmt(start)}&end_date=${fmt(now)}&cycle_type=30min&call_back=pressure&pressure_unitid=3`;
+    const url=`https://api.ecowitt.net/api/v3/device/history?application_key=${creds.app_key}&api_key=${creds.api_key}&mac=${creds.mac}&start_date=${fmt(start)}&end_date=${fmt(now)}&cycle_type=30min&call_back=pressure&pressure_unitid=3`;
     const j=await(await fetch(url)).json();
     const list=j?.data?.pressure?.relative?.list; if(!list) return;
     const pts=Object.entries(list).map(([t,v])=>[+t,parseFloat(v)]).filter(p=>!isNaN(p[1])).sort((a,b)=>a[0]-b[0]);
@@ -1115,13 +1223,17 @@ async function fetchRemote(loc){
 }
 
 // ── Sidebar temps ──
+async function quickTemp(key,lat,lon){
+  if(lat==null||lon==null) return;
+  try{
+    const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`)).json();
+    if(d.current_weather){ const e=$('dt_'+key); if(e){ e.textContent=d.current_weather.temperature.toFixed(0)+'°'; e.style.color=tColor(d.current_weather.temperature); } }
+  }catch(e){}
+}
 async function fetchSidebar(){
-  for(const l of userLocs){
-    try{
-      const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${l.lat}&longitude=${l.lon}&current_weather=true&timezone=auto`)).json();
-      if(d.current_weather){ const e=$('dt_'+l.key); if(e){ e.textContent=d.current_weather.temperature.toFixed(0)+'°'; e.style.color=tColor(d.current_weather.temperature); } }
-    }catch(e){}
-  }
+  // favourites + any station that isn't the one currently being fetched live
+  for(const l of userLocs) await quickTemp(l.key,l.lat,l.lon);
+  for(const s of allStations()){ if(s.key!==currentLoc) await quickTemp(s.key,s.lat,s.lon); }
 }
 
 // ── History charts (from Supabase) ──
@@ -1140,14 +1252,14 @@ let histMetric='temp', histRange='7';
 let histLocsSel=new Set(['home']);
 let _hist=null, _histRaw=null, _histReq=0;
 
-function defaultHistKey(){ if(currentLoc==='current') return (currentGeoLoc&&currentGeoLoc.atHome)?'home':null; return currentLoc; }
+function defaultHistKey(){ if(currentLoc==='current') return (currentGeoLoc&&currentGeoLoc.nearStationKey)?currentGeoLoc.nearStationKey:null; return currentLoc; }
 function resetHistLocs(){ const k=defaultHistKey()||'home'; histLocsSel = new Set([k]); } // away 'current' has no station → fall back to Home
 function setHistMetric(m,btn){ histMetric=m; document.querySelectorAll('#histMetrics .map-toggle').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); fetchHistory(); }
 function setHistRange(r,btn){ histRange=r; document.querySelectorAll('#histRanges .map-toggle').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); fetchHistory(); }
 function toggleHistLoc(key){ if(histLocsSel.has(key)){ if(histLocsSel.size>1) histLocsSel.delete(key); } else histLocsSel.add(key); renderHistLocs(); fetchHistory(); }
 function renderHistLocs(){
   const el=$('histLocs'); if(!el) return;
-  el.innerHTML=allLocs().map(l=>`<button class="hist-loc-chip ${histLocsSel.has(l.key)?'active':''}" onclick="toggleHistLoc('${l.key}')"><span class="hist-loc-dot" style="background:${locColor(l.key)}"></span>${l.key==='home'?'Home':l.name}</button>`).join('');
+  el.innerHTML=allLocs().map(l=>`<button class="hist-loc-chip ${histLocsSel.has(l.key)?'active':''}" onclick="toggleHistLoc('${l.key}')"><span class="hist-loc-dot" style="background:${locColor(l.key)}"></span>${esc(l.key==='home'?'Home':l.name)}</button>`).join('');
 }
 
 async function fetchHistory(){
@@ -1226,7 +1338,7 @@ function drawHistory(seriesIn,cfg,days,selKeys){
   _hist={screen,W,H,padL,padR,padT,padB,t0,t1,cfg};
   const fmt=v=>v.toFixed(cfg.dec)+cfg.unit;
   let leg='';
-  series.forEach(s=>{ const last=s.raw[s.raw.length-1]; leg+=`<div class="hist-leg-item"><span class="dot" style="background:${s.color}"></span>${s.name} <b>${fmt(last.v)}</b></div>`; });
+  series.forEach(s=>{ const last=s.raw[s.raw.length-1]; leg+=`<div class="hist-leg-item"><span class="dot" style="background:${s.color}"></span>${esc(s.name)} <b>${fmt(last.v)}</b></div>`; });
   if(selKeys.length===1 && series.length===1){ const vals=series[0].raw.map(p=>p.v); const avg=vals.reduce((a,b)=>a+b,0)/vals.length; leg+=`<div class="hist-stat">Min <b>${fmt(Math.min(...vals))}</b></div><div class="hist-stat">Avg <b>${fmt(avg)}</b></div><div class="hist-stat">Max <b>${fmt(Math.max(...vals))}</b></div>`; }
   const drawn=new Set(series.map(s=>s.key)); const dropped=selKeys.filter(k=>!drawn.has(k)).map(k=>{const l=allLocs().find(x=>x.key===k);return k==='home'?'Home':(l?l.name:k);});
   if(dropped.length) leg+=`<div class="hist-stat" style="color:var(--t45)">No data: ${dropped.join(', ')}</div>`;
@@ -1251,7 +1363,7 @@ function histHover(clientX){
     let med=Infinity; if(s.sp.length>1){ const dxs=[]; for(let i=1;i<s.sp.length;i++) dxs.push(s.sp[i].x-s.sp[i-1].x); dxs.sort((a,b)=>a-b); med=dxs[Math.floor(dxs.length/2)]; }
     if(Math.abs(best.x-ux)>Math.max(10,med*1.5)) return;
     dots+=`<circle cx="${best.x.toFixed(1)}" cy="${best.y.toFixed(1)}" r="4" fill="${s.color}" stroke="#0b2235" stroke-width="1.5"/>`;
-    rows+=`<div class="tip-row"><span class="dot" style="background:${s.color}"></span>${s.name}<b>${best.v.toFixed(_hist.cfg.dec)+_hist.cfg.unit}</b></div>`;
+    rows+=`<div class="tip-row"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}<b>${best.v.toFixed(_hist.cfg.dec)+_hist.cfg.unit}</b></div>`;
   });
   if(dg) dg.innerHTML=dots;
   if(!rows){ tip.style.opacity=0; return; }
@@ -1278,16 +1390,24 @@ async function fetchAll(){
   const btn=$('refreshBtn'); btn.classList.add('spin');
   const loc=locByKey(currentLoc);
   if(!loc){ btn.classList.remove('spin'); return; } // 'current' not resolved yet
-  const isHome=isHomeView();
-  const tasks=[fetchForecast(loc.lat,loc.lon,isHome), fetchAQI(loc.lat,loc.lon), fetchSidebar()];
-  if(isHome) tasks.push(fetchStation(), fetchPressureTrend()); else tasks.push(fetchRemote(loc));
+  // Resolve the active station (a station view, or current-location sitting near one)
+  const station = loc.isStation ? loc
+    : (currentLoc==='current' && currentGeoLoc?.nearStationKey
+        ? allStations().find(s=>s.key===currentGeoLoc.nearStationKey) : null);
+  const isStation=!!station;
+  setStationCards(isStation); // keep station-only cards in sync with the real data source
+  const hasCoords = loc.lat!=null && loc.lon!=null;
+  const tasks=[fetchSidebar()];
+  if(hasCoords){ tasks.push(fetchForecast(loc.lat,loc.lon,isStation), fetchAQI(loc.lat,loc.lon)); }
+  if(station) tasks.push(fetchStation(station.creds, station.key), fetchPressureTrend(station.creds));
+  else if(hasCoords) tasks.push(fetchRemote(loc));
   updateMoon();
   await Promise.all(tasks);
   btn.classList.remove('spin');
 }
 
 // ── App version / updates ──
-const APP_BUILD='v16 · 2026-06-07';
+const APP_BUILD='v17 · 2026-06-07';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
@@ -1313,18 +1433,16 @@ async function startApp(){
   if(_started) return; _started=true;
   setBuildTag();
   const so=$('signOutBtn'); if(so) so.style.display='block';
-  // Load this user's favourites from the DB (cross-device); migrate local cache on first login.
+  // Load this user's stations + favourites from the DB (cross-device); migrate local favourites on first login.
   try{
+    userStations=await loadUserStations();
     let db=await loadUserLocs();
     if(db && db.length===0){ for(const l of userLocs){ await dbAddUserLoc(l); } db=await loadUserLocs(); }
     if(db) { userLocs=db; saveLocs(userLocs); }
   }catch(e){}
   syncLocations();
   renderDrawer();
-  updateMap(HOME_LAT,HOME_LON);
-  setHomeCards(true);
-  fetchAll();
-  resetHistLocs(); renderHistLocs(); fetchHistory();
+  defaultView();              // first station, else built-in home
   setInterval(fetchAll,60000);
 }
 
