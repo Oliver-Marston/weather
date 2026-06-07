@@ -295,6 +295,7 @@ body {
       <svg style="width:14px;height:14px" stroke="currentColor"><use href="#ic-plus"/></svg>
       Add location
     </button>
+    <div style="text-align:center;font-size:10px;color:var(--t45);margin-top:10px" id="buildTag">—</div>
   </div>
 </nav>
 
@@ -306,7 +307,7 @@ body {
     <div class="topbar-sub" id="topSub">Loading…</div>
   </div>
   <div class="live-pill"><div class="live-dot"></div><span id="liveTime">—</span></div>
-  <button class="refresh-btn" id="refreshBtn" onclick="fetchAll()">↻</button>
+  <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh()">↻</button>
 </div>
 
 <div class="page">
@@ -929,7 +930,29 @@ async function fetchAll(){
   btn.classList.remove('spin');
 }
 
+// ── App version / updates ──
+const APP_BUILD='v7 · 2026-06-07';
+function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
+
+// Refresh button: reload weather data AND check for a newer app version.
+async function manualRefresh(){
+  fetchAll();
+  if('serviceWorker' in navigator){
+    try{ const reg=await navigator.serviceWorker.getRegistration(); if(reg) reg.update(); }catch(e){}
+  }
+}
+
+// Service worker: network-first, so the installed app self-updates when online.
+if('serviceWorker' in navigator){
+  let reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(reloaded) return; reloaded=true; location.reload();
+  });
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+
 // ── Init ──
+setBuildTag();
 renderDrawer();
 updateMap(HOME_LAT,HOME_LON);
 $('indoorCard').style.display='flex'; $('stationCard').style.display='flex';
