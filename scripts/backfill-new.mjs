@@ -67,6 +67,43 @@ async function archive(loc) {
   }).filter(r => r.temp != null);
 }
 
+// Stations: backfill whatever recent history Ecowitt has (free-tier depth is
+// shallow). Per-day 30-min history merged across sensor categories.
+async function getUserStations() {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_stations?select=station_key,name,app_key,api_key,mac`, { headers: SB });
+  if (!r.ok) return [];
+  return r.json();
+}
+async function stationHistory(creds, station_key, days = 30) {
+  const rows = [], now = Date.now();
+  for (let d = days; d >= 0; d--) {
+    const dt = new Date(now - d * 86400000);
+    const u = `https://api.ecowitt.net/api/v3/device/history?application_key=${creds.app_key}&api_key=${creds.api_key}&mac=${creds.mac}`
+      + `&start_date=${ymd(dt)}%2000:00:00&end_date=${ymd(dt)}%2023:59:59&cycle_type=30min`
+      + `&call_back=outdoor,wind,pressure,solar_and_uvi,rainfall_piezo,indoor,soil_ch1`
+      + `&temp_unitid=1&pressure_unitid=3&wind_speed_unitid=7&rainfall_unitid=12&solar_irradiance_unitid=16`;
+    let j; try { j = await (await fetch(u)).json(); } catch (e) { await sleep(300); continue; }
+    if (j.code !== 0) { await sleep(300); continue; }
+    const cats = j.data || {}, tempList = cats.outdoor?.temperature?.list || {};
+    const g = (cat, f, t) => num(cats?.[cat]?.[f]?.list?.[t]);
+    for (const t of Object.keys(tempList)) {
+      const vpd = g('outdoor', 'vpd', t);
+      rows.push({ location_key: station_key, observed_at: new Date(+t * 1000).toISOString(), source: 'ecowitt',
+        temp: num(tempList[t]), feels_like: g('outdoor', 'feels_like', t) ?? g('outdoor', 'app_temp', t),
+        humidity: g('outdoor', 'humidity', t), dew_point: g('outdoor', 'dew_point', t),
+        pressure: g('pressure', 'relative', t), pressure_abs: g('pressure', 'absolute', t),
+        wind_speed: g('wind', 'wind_speed', t), wind_gust: g('wind', 'wind_gust', t), wind_dir: g('wind', 'wind_direction', t),
+        uv: g('solar_and_uvi', 'uvi', t), solar: g('solar_and_uvi', 'solar', t),
+        rain_rate: g('rainfall_piezo', 'rain_rate', t),
+        indoor_temp: g('indoor', 'temperature', t), indoor_humidity: g('indoor', 'humidity', t),
+        soil_moisture: g('soil_ch1', 'soilmoisture', t),
+        vpd: vpd == null ? null : vpd * 3.386389 });
+    }
+    await sleep(300);
+  }
+  return rows;
+}
+
 (async () => {
   const locs = (await getLocations()).filter(l => !l.is_home);
   let did = 0;
@@ -78,5 +115,13 @@ async function archive(loc) {
     console.log(`✓ backfilled ${loc.key} (${loc.name}): ${n} rows`);
     did++; await sleep(400);
   }
-  console.log(did ? `Backfilled ${did} new location(s)` : 'No new locations to backfill');
+  for (const st of await getUserStations()) {
+    if (await hasReadings(st.station_key)) { continue; }
+    const rows = await stationHistory({ app_key: st.app_key, api_key: st.api_key, mac: st.mac }, st.station_key, 30);
+    if (!rows.length) { console.log(`· station ${st.name}: no history`); continue; }
+    const n = await bulkInsert(rows);
+    console.log(`✓ backfilled station ${st.name}: ${n} rows`);
+    did++;
+  }
+  console.log(did ? `Backfilled ${did} new item(s)` : 'No new items to backfill');
 })();

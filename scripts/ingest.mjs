@@ -44,12 +44,19 @@ async function getLocations() {
   return r.json();
 }
 
-async function readEcowitt() {
-  if (!ECOWITT_APP_KEY || !ECOWITT_API_KEY || !ECOWITT_MAC) {
-    throw new Error('Ecowitt env not set');
+// All users' stations (service key bypasses owner-only RLS — cron has no session).
+async function getUserStations() {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_stations?select=station_key,provider,name,app_key,api_key,mac`, SB);
+  if (!r.ok) { console.error(`user_stations fetch ${r.status}`); return []; }
+  return r.json();
+}
+
+async function readEcowitt(creds) {
+  if (!creds || !creds.app_key || !creds.api_key || !creds.mac) {
+    throw new Error('Ecowitt creds not set');
   }
-  const u = `https://api.ecowitt.net/api/v3/device/real_time?application_key=${ECOWITT_APP_KEY}`
-    + `&api_key=${ECOWITT_API_KEY}&mac=${ECOWITT_MAC}&call_back=all`
+  const u = `https://api.ecowitt.net/api/v3/device/real_time?application_key=${creds.app_key}`
+    + `&api_key=${creds.api_key}&mac=${creds.mac}&call_back=all`
     + `&temp_unitid=1&pressure_unitid=3&wind_speed_unitid=7&rainfall_unitid=12&solar_irradiance_unitid=16`;
   const j = await (await fetch(u)).json();
   if (j.code !== 0) throw new Error(`Ecowitt: ${j.msg}`);
@@ -115,22 +122,33 @@ async function insertReading(row) {
   if (!r.ok) throw new Error(`insert ${row.location_key} ${r.status}: ${await r.text()}`);
 }
 
+const ENV_HOME_CREDS = { app_key: ECOWITT_APP_KEY, api_key: ECOWITT_API_KEY, mac: ECOWITT_MAC };
+
 (async () => {
   const observed_at = new Date().toISOString();
-  const locs = await getLocations();
-  console.log(`Tracking ${locs.length} locations`);
+  const [locs, stations] = await Promise.all([getLocations(), getUserStations()]);
+  console.log(`Tracking ${locs.length} forecast locations + ${stations.length} stations`);
   let ok = 0, fail = 0;
+
+  // Forecast locations (Open-Meteo). The legacy hard-coded 'home' row still uses
+  // the env Ecowitt creds during transition; removed in the clear-down stage.
   for (const loc of locs) {
     try {
-      const metrics = loc.is_home ? await readEcowitt() : await readOpenMeteo(loc);
+      const metrics = loc.is_home ? await readEcowitt(ENV_HOME_CREDS) : await readOpenMeteo(loc);
       await insertReading({ location_key: loc.key, observed_at, ...metrics });
-      console.log(`✓ ${loc.key}: ${metrics.temp}°C`);
-      ok++;
-    } catch (e) {
-      console.error(`✗ ${loc.key}: ${e.message}`);
-      fail++;
-    }
+      console.log(`✓ ${loc.key}: ${metrics.temp}°C`); ok++;
+    } catch (e) { console.error(`✗ ${loc.key}: ${e.message}`); fail++; }
   }
+
+  // User stations (Ecowitt) — logged under their random station_key.
+  for (const st of stations) {
+    try {
+      const metrics = await readEcowitt({ app_key: st.app_key, api_key: st.api_key, mac: st.mac });
+      await insertReading({ location_key: st.station_key, observed_at, ...metrics });
+      console.log(`✓ ${st.station_key} (${st.name}): ${metrics.temp}°C`); ok++;
+    } catch (e) { console.error(`✗ ${st.station_key} (${st.name}): ${e.message}`); fail++; }
+  }
+
   console.log(`Done — ${ok} ok, ${fail} failed`);
   if (ok === 0) process.exit(1);
 })();

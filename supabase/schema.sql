@@ -119,3 +119,26 @@ create table if not exists user_locations (
 alter table user_locations enable row level security;
 create policy "own user_locations" on user_locations
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ── Per-user weather stations (each user adds their own; keys RLS-protected) ──
+create table if not exists user_stations (
+  id           bigint generated always as identity primary key,
+  user_id      uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  station_key  text not null unique default ('st_' || replace(gen_random_uuid()::text,'-','')),
+  provider     text not null default 'ecowitt',
+  name         text not null,
+  app_key      text not null,   -- Ecowitt application_key
+  api_key      text not null,   -- Ecowitt api_key
+  mac          text not null,
+  lat          double precision,
+  lon          double precision,
+  created_at   timestamptz not null default now()
+);
+alter table user_stations enable row level security;
+create policy "own user_stations" on user_stations
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Station readings are logged into the shared `readings` table under the random
+-- station_key, so charts/history reuse get_history. That means readings rows can
+-- have keys that are NOT in `locations`, so drop the FK constraint.
+alter table readings drop constraint if exists readings_location_key_fkey;
