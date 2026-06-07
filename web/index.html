@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>My Weather Station — Live dashboard for your Ecowitt station</title>
+<meta name="description" content="Turn your Ecowitt station into a live weather dashboard with a year of history, trends and side-by-side location comparison — in one fast, installable app.">
+
+<link rel="canonical" href="https://ecowitt-burton-on-the-wolds.netlify.app/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="My Weather Station">
+<meta property="og:title" content="My Weather Station — Live dashboard for your Ecowitt station">
+<meta property="og:description" content="Turn your Ecowitt station into a live weather dashboard with a year of history, trends and side-by-side location comparison — in one fast, installable app.">
+<meta property="og:url" content="https://ecowitt-burton-on-the-wolds.netlify.app/">
+<meta property="og:image" content="https://ecowitt-burton-on-the-wolds.netlify.app/icon-512.png">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+<meta property="og:image:alt" content="My Weather Station app icon">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="My Weather Station — Live dashboard for your Ecowitt station">
+<meta name="twitter:description" content="Turn your Ecowitt station into a live weather dashboard with a year of history, trends and side-by-side location comparison — in one fast, installable app.">
+<meta name="twitter:image" content="https://ecowitt-burton-on-the-wolds.netlify.app/icon-512.png">
+
+<meta name="theme-color" content="#2d6ea0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='12' r='6' fill='%23ff8a3d'/%3E%3Cpath d='M22 26h-9a5 5 0 1 1 1-9.9A6 6 0 0 1 25 18a4 4 0 0 1-3 8z' fill='%232ce0d0'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg-1: #5a9ecf;
+  --bg-2: #2d6ea0;
+  --bg-3: #16456f;
+  --bg-gradient: linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 48%, var(--bg-3) 100%);
+
+  --glass-bg: rgba(255, 255, 255, 0.10);
+  --glass-bg-strong: rgba(255, 255, 255, 0.16);
+  --glass-border: rgba(255, 255, 255, 0.22);
+  --glass-border-bright: rgba(255, 255, 255, 0.40);
+  --glass-blur: 18px;
+  --glass-shadow: 0 8px 32px rgba(10, 40, 70, 0.28);
+
+  --warm: #ff8a3d;
+  --cool: #2ce0d0;
+  --rain: #aaddff;
+  --warm-cool: linear-gradient(120deg, var(--warm), var(--cool));
+
+  --text: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.86);
+  --text-faint: rgba(255, 255, 255, 0.72);
+
+  --font: "Inter", system-ui, -apple-system, sans-serif;
+
+  --r-sm: 10px;  --r: 18px;  --r-lg: 28px;  --r-pill: 999px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur: 280ms;
+
+  --maxw: 1160px;
+  --gutter: 24px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: inherit; text-decoration: none; }
+
+img, svg { display: block; max-width: 100%; }
+
+::selection { background: rgba(44, 224, 208, 0.30); color: #fff; }
+
+/* ── Ambient blobs ── */
+.blob {
+  position: fixed;
+  z-index: 0;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  will-change: transform;
+}
+.blob--warm {
+  top: -160px; right: -120px;
+  width: 520px; height: 520px;
+  background: var(--warm);
+  opacity: 0.14;
+  animation: drift1 26s ease-in-out infinite;
+}
+.blob--cool {
+  bottom: -200px; left: -160px;
+  width: 560px; height: 560px;
+  background: var(--cool);
+  opacity: 0.12;
+  animation: drift2 32s ease-in-out infinite;
+}
+@keyframes drift1 {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  50% { transform: translate(-40px, 50px) scale(1.12); }
+}
+@keyframes drift2 {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  50% { transform: translate(50px, -40px) scale(1.1); }
+}
+
+/* ── Layout helpers ── */
+.container {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding-inline: var(--gutter);
+  position: relative;
+  z-index: 1;
+}
+
+section { position: relative; z-index: 1; }
+
+.section-pad { padding-block: clamp(64px, 9vw, 96px); }
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cool);
+}
+
+h1, h2, h3 { color: var(--text); line-height: 1.12; letter-spacing: -0.02em; }
+
+.section-head { max-width: 640px; margin: 0 auto clamp(36px, 5vw, 56px); text-align: center; }
+.section-head h2 {
+  font-size: clamp(28px, 5vw, 36px);
+  font-weight: 700;
+  margin-top: 12px;
+}
+.section-head p {
+  color: var(--text-muted);
+  font-size: 17px;
+  margin-top: 14px;
+}
+
+.gradient-text {
+  background: var(--warm-cool);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: var(--r-pill);
+  padding: 13px 24px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform var(--dur) var(--ease), background var(--dur) var(--ease),
+              box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  white-space: nowrap;
+}
+.btn:active { transform: scale(0.98); }
+
+.btn--warm {
+  background: var(--warm);
+  color: #16456f;
+  box-shadow: 0 6px 24px rgba(255, 138, 61, 0.45);
+}
+.btn--warm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 34px rgba(255, 138, 61, 0.6);
+}
+
+.btn--glass {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: var(--glass-border);
+  color: #fff;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.btn--glass:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: var(--glass-border-bright);
+  transform: translateY(-2px);
+}
+
+.btn--block { width: 100%; }
+
+/* ── Focus styles ── */
+a:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--cool);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+}
+
+/* ── Sticky nav ── */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  transition: background var(--dur) var(--ease), backdrop-filter var(--dur) var(--ease),
+              border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  background: rgba(45, 110, 160, 0.18);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid transparent;
+}
+.nav.scrolled {
+  background: rgba(22, 69, 111, 0.55);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border-bottom-color: var(--glass-border);
+  box-shadow: 0 6px 24px rgba(10, 40, 70, 0.25);
+}
+.nav__inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 68px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+.brand__logo { width: 34px; height: 34px; flex-shrink: 0; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.2)); }
+
+.nav__links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-inline: auto;
+}
+.nav__links a {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-muted);
+  position: relative;
+  transition: color var(--dur) var(--ease);
+  padding-block: 4px;
+}
+.nav__links a::after {
+  content: "";
+  position: absolute;
+  left: 0; bottom: -2px;
+  height: 2px; width: 100%;
+  background: var(--warm-cool);
+  background-size: 0% 100%;
+  background-repeat: no-repeat;
+  transition: background-size var(--dur) var(--ease);
+}
+.nav__links a:hover { color: #fff; }
+.nav__links a:hover::after { background-size: 100% 100%; }
+
+.nav__actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.nav__signin { font-size: 15px; font-weight: 500; color: var(--text-muted); transition: color var(--dur) var(--ease); }
+.nav__signin:hover { color: #fff; }
+
+.nav__burger {
+  display: none;
+  width: 44px; height: 44px;
+  flex-shrink: 0;
+  margin-left: auto;
+  align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.nav__burger svg { width: 22px; height: 22px; stroke: #fff; }
+
+/* Mobile sheet */
+.mobile-sheet {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+.mobile-sheet.open { display: block; }
+.mobile-sheet__overlay {
+  position: absolute; inset: 0;
+  background: rgba(10, 35, 60, 0.5);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.mobile-sheet__panel {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: min(320px, 84vw);
+  background: linear-gradient(170deg, rgba(53, 122, 176, 0.96), rgba(22, 69, 111, 0.98));
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-left: 1px solid var(--glass-border);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: -10px 0 40px rgba(0,0,0,0.3);
+}
+.mobile-sheet__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.mobile-sheet__close {
+  width: 40px; height: 40px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  color: #fff; font-size: 22px; cursor: pointer; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.mobile-sheet__panel a:not(.btn) {
+  font-size: 17px; font-weight: 500;
+  padding: 12px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  color: var(--text-muted);
+  transition: color var(--dur) var(--ease);
+}
+.mobile-sheet__panel a:not(.btn):hover { color: #fff; }
+.mobile-sheet__panel .btn { margin-top: 16px; }
+
+/* ── Hero ── */
+.hero { padding-top: clamp(40px, 7vw, 72px); padding-bottom: clamp(48px, 8vw, 96px); }
+.hero__grid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 64px;
+  align-items: center;
+  min-height: 80vh;
+}
+.hero__copy { max-width: 560px; }
+.hero h1 {
+  font-size: clamp(38px, 6vw, 60px);
+  font-weight: 700;
+  margin: 18px 0 0;
+}
+.hero__sub {
+  font-size: 18px;
+  color: var(--text-muted);
+  max-width: 48ch;
+  margin-top: 22px;
+}
+.hero__cta {
+  display: flex;
+  gap: 14px;
+  margin-top: 32px;
+  flex-wrap: wrap;
+}
+.hero__note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.hero__note svg { width: 18px; height: 18px; stroke: var(--cool); flex-shrink: 0; }
+
+.hero__mockwrap { display: flex; justify-content: center; align-items: center; }
+
+/* ── Phone mock ── */
+.phone {
+  width: 300px;
+  max-width: 84vw;
+  aspect-ratio: 300 / 620;
+  border-radius: 46px;
+  padding: 12px;
+  background: linear-gradient(160deg, rgba(255,255,255,.28), rgba(255,255,255,.06));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,.4);
+  position: relative;
+  animation: float 6s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.phone__notch {
+  position: absolute;
+  top: 20px; left: 50%;
+  transform: translateX(-50%);
+  width: 96px; height: 22px;
+  background: #0c2438;
+  border-radius: 0 0 14px 14px;
+  z-index: 4;
+}
+.phone__screen {
+  height: 100%;
+  border-radius: 34px;
+  overflow: hidden;
+  background: linear-gradient(165deg, #6fb1da, #2d6ea0 55%, #123a5e);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 14px;
+}
+.phone__screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 38%);
+  pointer-events: none;
+}
+.scr-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  padding-top: 4px;
+}
+.scr-status__right { display: flex; align-items: center; gap: 5px; }
+.scr-bars { display: flex; align-items: flex-end; gap: 2px; height: 11px; }
+.scr-bars i { width: 3px; background: #fff; border-radius: 1px; display: block; }
+.scr-bars i:nth-child(1) { height: 4px; }
+.scr-bars i:nth-child(2) { height: 6px; }
+.scr-bars i:nth-child(3) { height: 8px; }
+.scr-bars i:nth-child(4) { height: 11px; }
+.scr-wifi {
+  width: 14px; height: 11px;
+  border: 2px solid #fff;
+  border-bottom: none; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  position: relative;
+  opacity: 0.95;
+}
+.scr-batt {
+  width: 22px; height: 11px;
+  border: 1px solid #fff; border-radius: 3px;
+  position: relative;
+  padding: 1px;
+}
+.scr-batt::after { content:""; display:block; width: 70%; height:100%; background:#fff; border-radius:1px; }
+.scr-batt::before { content:""; position:absolute; right:-3px; top:3px; width:2px; height:5px; background:#fff; border-radius:0 1px 1px 0; }
+
+.scr-loc { font-size: 12px; color: rgba(255,255,255,0.85); margin-top: 14px; font-weight: 500; }
+.scr-temp {
+  font-size: 88px;
+  font-weight: 200;
+  line-height: 0.95;
+  letter-spacing: -3px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 6px 30px rgba(0,0,0,0.25);
+  margin-top: 2px;
+}
+.scr-cond { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; margin-top: -2px; }
+.scr-sun {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffd27a, var(--warm));
+  box-shadow: 0 0 12px rgba(255,138,61,0.7);
+  flex-shrink: 0;
+}
+
+.scr-hourly { display: flex; gap: 6px; margin-top: 16px; }
+.scr-hpill {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 2px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 12px;
+  font-size: 10px;
+}
+.scr-hpill.active { background: rgba(44,224,208,0.22); border-color: rgba(44,224,208,0.5); }
+.scr-hpill .t { color: rgba(255,255,255,0.8); }
+.scr-hpill .d { width: 5px; height: 5px; border-radius: 50%; background: var(--cool); }
+.scr-hpill .v { font-weight: 700; font-size: 12px; }
+
+.scr-bars-card { margin-top: 14px; display: flex; flex-direction: column; gap: 9px; }
+.scr-brow { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.scr-brow .lbl { width: 28px; color: rgba(255,255,255,0.8); font-weight: 600; }
+.scr-track { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.16); overflow: hidden; }
+.scr-fill { height: 100%; border-radius: 3px; background: var(--warm-cool); }
+.scr-brow .num { width: 26px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.scr-glass {
+  margin-top: 14px;
+  background: rgba(255,255,255,0.14);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.scr-glass span { color: rgba(255,255,255,0.85); }
+.scr-glass b { font-weight: 700; }
+
+/* ── Trust strip ── */
+.trust {
+  border-top: 1px solid rgba(255,255,255,0.10);
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  padding-block: 28px;
+}
+.trust__inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 5vw, 56px);
+  flex-wrap: wrap;
+  text-align: center;
+}
+.trust__line { font-size: 14px; font-weight: 600; color: var(--text-muted); }
+.trust__line b { color: #fff; }
+.trust__marks { display: flex; align-items: center; gap: clamp(18px, 4vw, 40px); flex-wrap: wrap; justify-content: center; }
+.trust__mark {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600;
+  color: var(--text-faint);
+}
+.trust__mark svg { width: 18px; height: 18px; stroke: currentColor; }
+
+/* ── Feature grid ── */
+.features__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+.fcard {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  padding: 28px;
+  box-shadow: var(--glass-shadow);
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease),
+              box-shadow var(--dur) var(--ease);
+}
+.fcard:hover {
+  transform: translateY(-6px);
+  border-color: var(--glass-border-bright);
+  box-shadow: 0 16px 44px rgba(10, 40, 70, 0.4);
+}
+.fcard:hover .fcard__icon { opacity: 1; }
+.fcard__icon {
+  width: 48px; height: 48px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--warm-cool);
+  position: relative;
+  opacity: 0.85;
+  transition: opacity var(--dur) var(--ease);
+  margin-bottom: 18px;
+}
+.fcard__icon::before {
+  content: "";
+  position: absolute; inset: 1px;
+  border-radius: 13px;
+  background: rgba(22, 69, 111, 0.55);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.fcard__icon svg { width: 24px; height: 24px; stroke: #fff; position: relative; z-index: 1; }
+.fcard h3 { font-size: 19px; font-weight: 600; }
+.fcard p { font-size: 14.5px; color: var(--text-muted); margin-top: 10px; }
+
+/* ── How it works ── */
+.how__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+.step {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  padding: 28px;
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.step:hover { transform: translateY(-6px); border-color: var(--glass-border-bright); }
+.step__num {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700;
+  color: #16456f;
+  background: var(--warm-cool);
+  box-shadow: 0 4px 16px rgba(255,138,61,0.3);
+  margin-bottom: 18px;
+}
+.step h3 { font-size: 19px; font-weight: 600; }
+.step p { font-size: 14.5px; color: var(--text-muted); margin-top: 10px; }
+
+/* ── Showcase / history chart band ── */
+.showcase__grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 56px;
+  align-items: center;
+}
+.showcase__copy h2 { font-size: clamp(28px, 4.5vw, 36px); font-weight: 700; margin-top: 12px; }
+.showcase__copy p { color: var(--text-muted); font-size: 17px; margin-top: 16px; }
+.showcase__list { list-style: none; margin-top: 22px; display: flex; flex-direction: column; gap: 12px; }
+.showcase__list li { display: flex; align-items: flex-start; gap: 12px; font-size: 15px; color: var(--text-muted); }
+.showcase__list svg { width: 20px; height: 20px; stroke: var(--cool); flex-shrink: 0; margin-top: 2px; }
+
+.chart-card {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  box-shadow: var(--glass-shadow);
+}
+.chart-card__top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+.chart-card__title { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.chart-card__chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  font-size: 11px; font-weight: 600;
+  padding: 5px 11px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.08);
+  color: var(--text-faint);
+}
+.chip.active { color: #fff; background: rgba(255,255,255,0.20); border-color: var(--glass-border-bright); }
+.chart-card__legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 14px 0 8px; }
+.leg { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-muted); }
+.leg .dot { width: 10px; height: 10px; border-radius: 50%; }
+.leg b { color: #fff; font-weight: 700; }
+.chart-card svg.chart { width: 100%; height: auto; display: block; }
+.chart-xaxis { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-faint); margin-top: 6px; }
+
+/* ── Stats band ── */
+.stats__panel {
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
+  padding: clamp(32px, 5vw, 48px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+.stat { text-align: center; }
+.stat__num {
+  font-size: clamp(34px, 5vw, 48px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--warm-cool);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  line-height: 1;
+}
+.stat__label { font-size: 14px; color: var(--text-muted); margin-top: 10px; }
+
+/* ── Testimonial / honest callout ── */
+.quote-card {
+  max-width: 820px;
+  margin: 0 auto;
+  text-align: center;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
+  padding: clamp(36px, 5vw, 56px);
+}
+.quote-card blockquote {
+  font-size: clamp(20px, 3vw, 26px);
+  font-weight: 500;
+  line-height: 1.45;
+  margin: 0 0 26px;
+  letter-spacing: -0.01em;
+}
+.quote-card__who { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.avatar {
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  background: var(--warm-cool);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+}
+.avatar svg { width: 26px; height: 26px; stroke: #16456f; }
+.quote-card__name { font-weight: 600; text-align: left; }
+.quote-card__role { font-size: 13px; color: var(--text-muted); text-align: left; }
+
+/* ── FAQ ── */
+.faq__list { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.faq-item {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  overflow: hidden;
+  transition: border-color var(--dur) var(--ease);
+}
+.faq-item[open] { border-color: var(--glass-border-bright); }
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 16.5px;
+  font-weight: 600;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary .chev {
+  width: 22px; height: 22px;
+  flex-shrink: 0;
+  transition: transform var(--dur) var(--ease);
+  stroke: var(--cool);
+}
+.faq-item[open] summary .chev { transform: rotate(180deg); }
+.faq-item__body { padding: 0 22px 22px; color: var(--text-muted); font-size: 15px; max-width: 64ch; }
+
+/* ── Final CTA ── */
+.finalcta { padding-block: clamp(64px, 9vw, 96px); }
+.finalcta__panel {
+  position: relative;
+  text-align: center;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
+  padding: clamp(44px, 7vw, 72px) clamp(24px, 5vw, 56px);
+  overflow: hidden;
+}
+.finalcta__panel::before {
+  content: "";
+  position: absolute;
+  top: -40%; left: 50%;
+  transform: translateX(-50%);
+  width: 520px; height: 520px;
+  max-width: 110%;
+  background: radial-gradient(circle, rgba(255,138,61,0.30), rgba(44,224,208,0.12) 45%, transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+}
+.finalcta__panel > * { position: relative; z-index: 1; }
+.finalcta h2 { font-size: clamp(30px, 5vw, 42px); font-weight: 700; }
+.finalcta p { color: var(--text-muted); font-size: 18px; margin: 16px auto 0; max-width: 52ch; }
+.finalcta__btns { display: flex; gap: 14px; justify-content: center; margin-top: 32px; flex-wrap: wrap; }
+
+/* ── Footer ── */
+.footer {
+  border-top: 1px solid rgba(255,255,255,0.12);
+  padding-block: 56px 40px;
+}
+.footer__grid {
+  display: grid;
+  grid-template-columns: 1.6fr repeat(3, 1fr);
+  gap: 40px;
+}
+.footer__brandcol { max-width: 320px; }
+.footer__tagline { color: var(--text-muted); font-size: 15px; margin-top: 16px; }
+.footer__col h4 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 16px; }
+.footer__col ul { list-style: none; display: flex; flex-direction: column; gap: 11px; }
+.footer__col a { font-size: 14.5px; color: var(--text-muted); transition: color var(--dur) var(--ease); }
+.footer__col a:hover { color: #fff; }
+.footer__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  font-size: 13.5px;
+  color: var(--text-faint);
+}
+.footer__made { display: flex; align-items: center; gap: 6px; }
+.footer__made a { color: var(--text-muted); }
+.footer__made a:hover { color: #fff; }
+
+/* ── Scroll reveal ── */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s var(--ease), transform 0.7s var(--ease); }
+.reveal.in { opacity: 1; transform: none; }
+
+/* ── Responsive ── */
+@media (max-width: 980px) {
+  .hero__grid { grid-template-columns: 1fr; gap: 40px; text-align: center; min-height: 0; }
+  .hero__copy { max-width: 620px; margin: 0 auto; }
+  .hero__sub { max-width: 56ch; margin-inline: auto; }
+  .hero__cta, .hero__note { justify-content: center; }
+  .showcase__grid { grid-template-columns: 1fr; gap: 40px; }
+  .showcase__copy { text-align: center; }
+  .showcase__list { max-width: 460px; margin-inline: auto; }
+  .how__grid { grid-template-columns: 1fr; max-width: 480px; margin: 0 auto; }
+  .nav__links, .nav__signin, .nav__actions { display: none; }
+  .nav__burger { display: flex; }
+  .footer__grid { grid-template-columns: 1fr 1fr; gap: 32px; }
+  .footer__brandcol { grid-column: 1 / -1; max-width: none; }
+}
+
+@media (max-width: 620px) {
+  :root { --gutter: 20px; }
+  .stats__panel { grid-template-columns: 1fr; gap: 28px 20px; }
+  .hero__cta .btn, .finalcta__btns .btn { width: 100%; }
+  .hero__cta, .finalcta__btns { flex-direction: column; }
+  .footer__grid { grid-template-columns: 1fr 1fr; }
+  .footer__bottom { flex-direction: column; align-items: flex-start; }
+  .quote-card__who { flex-wrap: wrap; }
+}
+
+@media (max-width: 400px) {
+  .phone { width: 260px; }
+  .footer__grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 360px) {
+  .brand { font-size: 17px; }
+  .brand__logo { width: 30px; height: 30px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .phone, .blob--warm, .blob--cool { animation: none; }
+  .reveal { opacity: 1; transform: none; transition: opacity 0.3s ease; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="blob blob--warm" aria-hidden="true"></div>
+<div class="blob blob--cool" aria-hidden="true"></div>
+
+<!-- Nav -->
+<header>
+<nav class="nav" id="nav" aria-label="Primary">
+  <div class="container nav__inner">
+    <a href="#top" class="brand" aria-label="My Weather Station home">
+      <svg class="brand__logo" viewBox="0 0 40 40" role="img" aria-hidden="true">
+        <defs>
+          <radialGradient id="sunG" cx="40%" cy="35%" r="70%">
+            <stop offset="0%" stop-color="#ffd27a"/>
+            <stop offset="100%" stop-color="#ff8a3d"/>
+          </radialGradient>
+        </defs>
+        <circle cx="16" cy="15" r="7.5" fill="url(#sunG)"/>
+        <path d="M28 32H14a6 6 0 0 1 1-11.9A7.5 7.5 0 0 1 31 22.5 5 5 0 0 1 28 32z" fill="#2ce0d0"/>
+      </svg>
+      <span>My Weather Station</span>
+    </a>
+
+    <div class="nav__links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#faq">FAQ</a>
+    </div>
+
+    <div class="nav__actions">
+      <a class="nav__signin" href="https://ecowitt-burton-on-the-wolds.netlify.app/">Sign in</a>
+      <a class="btn btn--warm" href="https://ecowitt-burton-on-the-wolds.netlify.app/">Connect your station</a>
+    </div>
+
+    <button class="nav__burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="mobileSheet">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+    </button>
+  </div>
+</nav>
+</header>
+
+<!-- Mobile sheet -->
+<div class="mobile-sheet" id="mobileSheet">
+  <div class="mobile-sheet__overlay" data-close></div>
+  <div class="mobile-sheet__panel" role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="mobile-sheet__head">
+      <span class="brand"><svg class="brand__logo" viewBox="0 0 40 40" aria-hidden="true"><circle cx="16" cy="15" r="7.5" fill="#ff8a3d"/><path d="M28 32H14a6 6 0 0 1 1-11.9A7.5 7.5 0 0 1 31 22.5 5 5 0 0 1 28 32z" fill="#2ce0d0"/></svg>My Weather Station</span>
+      <button class="mobile-sheet__close" id="sheetClose" aria-label="Close menu">&times;</button>
+    </div>
+    <a href="#features" data-close>Features</a>
+    <a href="#how" data-close>How it works</a>
+    <a href="#faq" data-close>FAQ</a>
+    <a href="https://ecowitt-burton-on-the-wolds.netlify.app/" data-close>Sign in</a>
+    <a class="btn btn--warm btn--block" href="https://ecowitt-burton-on-the-wolds.netlify.app/" data-close>Connect your station</a>
+  </div>
+</div>
+
+<main id="top">
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container hero__grid">
+    <div class="hero__copy reveal">
+      <span class="eyebrow">For Ecowitt station owners</span>
+      <h1>Turn your Ecowitt station into a <span class="gradient-text">live weather dashboard</span></h1>
+      <p class="hero__sub">Real-time readings from your own backyard sensors, a year of history and trends, and side-by-side location comparison — all in one fast, installable app.</p>
+      <div class="hero__cta">
+        <a class="btn btn--warm" href="https://ecowitt-burton-on-the-wolds.netlify.app/">Connect your station</a>
+        <a class="btn btn--glass" href="#how">See how it works</a>
+      </div>
+      <div class="hero__note">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span>Built on the real Ecowitt API and Open-Meteo</span>
+      </div>
+    </div>
+
+    <div class="hero__mockwrap reveal">
+      <!-- CSS-only phone preview -->
+      <div class="phone" role="img" aria-label="My Weather Station app preview showing 72 degrees, mostly sunny, an hourly strip and a 5-day mini forecast chart">
+        <span class="phone__notch" aria-hidden="true"></span>
+        <div class="phone__screen">
+          <div class="scr-status" aria-hidden="true">
+            <span>9:41</span>
+            <span class="scr-status__right">
+              <span class="scr-bars"><i></i><i></i><i></i><i></i></span>
+              <span class="scr-wifi"></span>
+              <span class="scr-batt"></span>
+            </span>
+          </div>
+          <div class="scr-loc" aria-hidden="true">Burton on the Wolds · Sat, Jun 7</div>
+          <div class="scr-temp" aria-hidden="true">72&deg;</div>
+          <div class="scr-cond" aria-hidden="true"><span class="scr-sun"></span> Mostly Sunny</div>
+
+          <div class="scr-hourly" aria-hidden="true">
+            <div class="scr-hpill"><span class="t">1PM</span><span class="d"></span><span class="v">73&deg;</span></div>
+            <div class="scr-hpill active"><span class="t">2PM</span><span class="d"></span><span class="v">75&deg;</span></div>
+            <div class="scr-hpill"><span class="t">3PM</span><span class="d"></span><span class="v">74&deg;</span></div>
+            <div class="scr-hpill"><span class="t">4PM</span><span class="d"></span><span class="v">71&deg;</span></div>
+            <div class="scr-hpill"><span class="t">5PM</span><span class="d"></span><span class="v">68&deg;</span></div>
+          </div>
+
+          <div class="scr-bars-card" aria-hidden="true">
+            <div class="scr-brow"><span class="lbl">Mon</span><span class="scr-track"><span class="scr-fill" style="width:62%"></span></span><span class="num">70&deg;</span></div>
+            <div class="scr-brow"><span class="lbl">Tue</span><span class="scr-track"><span class="scr-fill" style="width:78%"></span></span><span class="num">76&deg;</span></div>
+            <div class="scr-brow"><span class="lbl">Wed</span><span class="scr-track"><span class="scr-fill" style="width:90%"></span></span><span class="num">81&deg;</span></div>
+            <div class="scr-brow"><span class="lbl">Thu</span><span class="scr-track"><span class="scr-fill" style="width:55%"></span></span><span class="num">67&deg;</span></div>
+            <div class="scr-brow"><span class="lbl">Fri</span><span class="scr-track"><span class="scr-fill" style="width:70%"></span></span><span class="num">73&deg;</span></div>
+          </div>
+
+          <div class="scr-glass" aria-hidden="true">
+            <span>Feels like <b>75&deg;</b></span>
+            <span>UV <b>6</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Trust strip -->
+<section class="trust">
+  <div class="container trust__inner reveal">
+    <p class="trust__line">Your data comes straight from <b>your own sensors</b> — no guesswork from the cloud</p>
+    <div class="trust__marks" aria-label="Powered by">
+      <span class="trust__mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+        Ecowitt API
+      </span>
+      <span class="trust__mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+        Open-Meteo
+      </span>
+      <span class="trust__mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+        Installable PWA
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features section-pad" id="features">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Everything in one dashboard</span>
+      <h2>Built for people who watch the sky</h2>
+      <p>From your back-garden sensors to a year of trends and side-by-side comparisons — My Weather Station turns raw readings into something you actually want to look at.</p>
+    </div>
+
+    <div class="features__grid">
+
+      <article class="fcard reveal">
+        <div class="fcard__icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><line x1="12" y1="3" x2="12" y2="5.5"/><line x1="12" y1="18.5" x2="12" y2="21"/><line x1="3" y1="12" x2="5.5" y2="12"/><line x1="18.5" y1="12" x2="21" y2="12"/><line x1="5.6" y1="5.6" x2="7.4" y2="7.4"/><line x1="16.6" y1="16.6" x2="18.4" y2="18.4"/></svg></div>
+        <h3>Your Own Live Weather Station</h3>
+        <p>Real-time readings straight from your personal Ecowitt station — outdoor, indoor, soil moisture, UV, solar and pressure, all on one screen.</p>
+      </article>
+
+      <article class="fcard reveal">
+        <div class="fcard__icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+        <h3>Current-Location Weather</h3>
+        <p>Pull in the forecast for wherever you are right now, and add any other place you want to keep an eye on.</p>
+      </article>
+
+      <article class="fcard reveal">
+        <div class="fcard__icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><polyline points="7,14 11,9 14,12 19,5"/></svg></div>
+        <h3>12-Month History You Can Explore</h3>
+        <p>Interactive charts for temperature, humidity, pressure, wind, UV and rain spanning up to a year, with hover tooltips showing exact values.</p>
+      </article>
+
+      <article class="fcard reveal">
+        <div class="fcard__icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/><line x1="7" y1="9" x2="7" y2="15"/><line x1="17" y1="8" x2="17" y2="16"/></svg></div>
+        <h3>Compare Places Side by Side</h3>
+        <p>Overlay history from multiple locations on one chart to instantly see how your weather stacks up against anywhere else.</p>
+      </article>
+
+      <article class="fcard reveal">
+        <div class="fcard__icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 13h-.8A5 5 0 1 0 7 18h10.5a3 3 0 0 0 0-5z"/><circle cx="8" cy="6.5" r="2.4"/><line x1="8" y1="2" x2="8" y2="3"/><line x1="3.6" y1="6.5" x2="4.6" y2="6.5"/></svg></div>
+        <h3>Forecasts at a Glance</h3>
+        <p>24-hour and 10-day forecasts with rain chances, sunrise/sunset markers and colour-coded high/low temperature bars.</p>
+      </article>
+
+      <article class="fcard reveal">
+        <div class="fcard__icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 14 L16 8.5"/><circle cx="12" cy="14" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+        <h3>Pro-Grade Detail</h3>
+        <p>Wind compass with gusts and Beaufort, pressure-trend gauge, air quality index, sun arc and live moon phase.</p>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="how section-pad" id="how">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Up and running in minutes</span>
+      <h2>How it works</h2>
+      <p>No hardware to buy if you already own an Ecowitt station. Just link it, let it log, and start exploring.</p>
+    </div>
+
+    <div class="how__grid">
+      <article class="step reveal">
+        <div class="step__num">1</div>
+        <h3>Link your Ecowitt station</h3>
+        <p>Paste your Ecowitt application key, API key and station MAC. Your live readings — temperature, wind, rain, pressure and more — appear in seconds.</p>
+      </article>
+      <article class="step reveal">
+        <div class="step__num">2</div>
+        <h3>Watch it log automatically</h3>
+        <p>The app records your readings on a schedule, building 12 months of history and trends you can scroll back through any time.</p>
+      </article>
+      <article class="step reveal">
+        <div class="step__num">3</div>
+        <h3>Compare, install and go</h3>
+        <p>Add other locations to compare side by side, pull in your current location, then install the app to your home screen.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- Showcase / history chart -->
+<section class="showcase section-pad">
+  <div class="container showcase__grid">
+    <div class="showcase__copy reveal">
+      <span class="eyebrow">A year at your fingertips</span>
+      <h2>See exactly how your weather has changed</h2>
+      <p>Every reading your station logs builds a rich, interactive history. Scrub across twelve months, hover for exact values, and overlay other locations to compare.</p>
+      <ul class="showcase__list">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Temperature, humidity, pressure, wind, UV and rain</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Hover tooltips with the precise value at any point</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Overlay multiple locations on a single chart</li>
+      </ul>
+    </div>
+
+    <div class="chart-card reveal">
+      <div class="chart-card__top">
+        <span class="chart-card__title">Temperature · last 12 months</span>
+        <div class="chart-card__chips">
+          <span class="chip">3M</span>
+          <span class="chip">6M</span>
+          <span class="chip active">1Y</span>
+        </div>
+      </div>
+
+      <div class="chart-card__legend">
+        <span class="leg"><span class="dot" style="background:#ff8a3d"></span>Home station <b>61&deg;</b></span>
+        <span class="leg"><span class="dot" style="background:#2ce0d0"></span>London <b>57&deg;</b></span>
+      </div>
+
+      <svg class="chart" viewBox="0 0 600 260" role="img" aria-label="Line chart comparing twelve months of temperature for your home station against London, both peaking in summer.">
+        <defs>
+          <linearGradient id="warmFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ff8a3d" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#ff8a3d" stop-opacity="0"/>
+          </linearGradient>
+          <linearGradient id="coolFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#2ce0d0" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#2ce0d0" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+
+        <g stroke="rgba(255,255,255,0.10)" stroke-width="1">
+          <line x1="0" y1="40" x2="600" y2="40"/>
+          <line x1="0" y1="100" x2="600" y2="100"/>
+          <line x1="0" y1="160" x2="600" y2="160"/>
+          <line x1="0" y1="220" x2="600" y2="220"/>
+        </g>
+
+        <!-- Curves span Jul -> Jul; apex sits at the centre tick (now labelled Jan in winter trough)... -->
+        <!-- Peak placed at x=100 (winter->summer rise), aligning the summer apex with a 'Jan' is avoided: apex at the warmest mid-summer near both ends. -->
+        <path d="M0,55 C45,70 90,120 150,165 C210,205 250,215 300,212 C350,209 390,170 450,120 C505,80 555,60 600,52 L600,260 L0,260 Z" fill="url(#warmFill)"/>
+        <path d="M0,55 C45,70 90,120 150,165 C210,205 250,215 300,212 C350,209 390,170 450,120 C505,80 555,60 600,52" fill="none" stroke="#ff8a3d" stroke-width="3" stroke-linecap="round"/>
+
+        <path d="M0,72 C45,86 95,134 150,176 C205,214 250,224 300,221 C350,218 395,182 455,134 C510,94 555,76 600,68 L600,260 L0,260 Z" fill="url(#coolFill)"/>
+        <path d="M0,72 C45,86 95,134 150,176 C205,214 250,224 300,221 C350,218 395,182 455,134 C510,94 555,76 600,68" fill="none" stroke="#2ce0d0" stroke-width="3" stroke-linecap="round"/>
+
+        <!-- Summer peak marker aligned to the right-hand 'Jul' tick (x=600 region, drawn at x=560) -->
+        <line x1="560" y1="30" x2="560" y2="240" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="3 4"/>
+        <circle cx="560" cy="60" r="5" fill="#ff8a3d" stroke="#16456f" stroke-width="2"/>
+        <circle cx="560" cy="76" r="5" fill="#2ce0d0" stroke="#16456f" stroke-width="2"/>
+        <g transform="translate(388,86)">
+          <rect width="170" height="48" rx="8" fill="rgba(8,28,48,0.92)" stroke="rgba(255,255,255,0.22)"/>
+          <text x="12" y="19" fill="rgba(255,255,255,0.78)" font-family="Inter, sans-serif" font-size="11" font-weight="600">Jul · peak</text>
+          <text x="12" y="36" fill="#fff" font-family="Inter, sans-serif" font-size="13" font-weight="700">Home 79&deg; · London 73&deg;</text>
+        </g>
+      </svg>
+
+      <div class="chart-xaxis" aria-hidden="true">
+        <span>Jul</span><span>Sep</span><span>Nov</span><span>Jan</span><span>Mar</span><span>May</span><span>Jul</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Stats band -->
+<section class="stats section-pad" style="padding-top:0">
+  <div class="container">
+    <div class="stats__panel reveal">
+      <div class="stat">
+        <div class="stat__num" data-count="12">12</div>
+        <div class="stat__label">Months of history &amp; trends</div>
+      </div>
+      <div class="stat">
+        <div class="stat__num" data-count="10" data-static-suffix="-day">10-day</div>
+        <div class="stat__label">Forecast horizon</div>
+      </div>
+      <div class="stat">
+        <div class="stat__num">Free</div>
+        <div class="stat__label">No account fees to get started</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Honest callout (replaces fabricated testimonial) -->
+<section class="testimonial section-pad" style="padding-top:0">
+  <div class="container">
+    <div class="quote-card reveal">
+      <blockquote>“Real readings from your back garden, not a guess from the cloud — a full live dashboard, a year of trends, and your place compared against anywhere else in one chart.”</blockquote>
+      <div class="quote-card__who">
+        <div class="avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><line x1="12" y1="3" x2="12" y2="5.5"/><line x1="12" y1="18.5" x2="12" y2="21"/><line x1="3" y1="12" x2="5.5" y2="12"/><line x1="18.5" y1="12" x2="21" y2="12"/></svg>
+        </div>
+        <div>
+          <div class="quote-card__name">What the app does</div>
+          <div class="quote-card__role">Built on the real Ecowitt API + Open-Meteo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq section-pad" id="faq" style="padding-top:0">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Good to know</span>
+      <h2>Frequently asked questions</h2>
+    </div>
+
+    <div class="faq__list">
+      <details class="faq-item reveal">
+        <summary>Which weather stations are supported?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-item__body">Personal Ecowitt stations. You connect using your own Ecowitt application key, API key and station MAC address — your data stays tied to your account.</div>
+      </details>
+
+      <details class="faq-item reveal">
+        <summary>Where does the history come from?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-item__body">Once your station is linked, the app logs its readings on a schedule so you build up your own 12 months of history and trends. Forecasts for other locations come from Open-Meteo.</div>
+      </details>
+
+      <details class="faq-item reveal">
+        <summary>Do I need to install anything?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-item__body">No. It runs in any modern browser. Because it's a PWA you can also add it to your phone or desktop home screen.</div>
+      </details>
+
+      <details class="faq-item reveal">
+        <summary>Can I track more than one location?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-item__body">Yes. Alongside your own station you can add other locations to compare side by side, plus your current GPS location.</div>
+      </details>
+
+      <details class="faq-item reveal">
+        <summary>What does it cost?
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-item__body">There are no account fees to get started. You'll need your own Ecowitt station and a free Ecowitt API key; the app reads from that and from Open-Meteo.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section class="finalcta">
+  <div class="container">
+    <div class="finalcta__panel reveal">
+      <h2>Your station is already gathering data.<br>Put it online.</h2>
+      <p>Link your Ecowitt in seconds and get a live dashboard, a year of history, and side-by-side locations.</p>
+      <div class="finalcta__btns">
+        <a class="btn btn--warm" href="https://ecowitt-burton-on-the-wolds.netlify.app/">Connect your station</a>
+        <a class="btn btn--glass" href="#how">See how it works</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__grid">
+      <div class="footer__brandcol">
+        <a href="#top" class="brand" aria-label="My Weather Station home">
+          <svg class="brand__logo" viewBox="0 0 40 40" aria-hidden="true"><circle cx="16" cy="15" r="7.5" fill="#ff8a3d"/><path d="M28 32H14a6 6 0 0 1 1-11.9A7.5 7.5 0 0 1 31 22.5 5 5 0 0 1 28 32z" fill="#2ce0d0"/></svg>
+          <span>My Weather Station</span>
+        </a>
+        <p class="footer__tagline">Real readings from your back garden, not a guess from the cloud.</p>
+      </div>
+
+      <nav class="footer__col" aria-label="Product">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="https://ecowitt-burton-on-the-wolds.netlify.app/">Open the app</a></li>
+        </ul>
+      </nav>
+
+      <nav class="footer__col" aria-label="Resources">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#how">Connect Ecowitt</a></li>
+          <li><a href="https://ecowitt-burton-on-the-wolds.netlify.app/">Sign in</a></li>
+        </ul>
+      </nav>
+
+      <nav class="footer__col" aria-label="Company">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#faq">Support</a></li>
+          <li><a href="https://ecowitt-burton-on-the-wolds.netlify.app/">Open the app</a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <div class="footer__bottom">
+      <span>&copy; 2026 My Weather Station. All rights reserved.</span>
+      <span class="footer__made">Made with <a href="https://claude.com/claude-code">Claude</a> · Deployed on <a href="https://www.netlify.com">▲ Netlify</a></span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  // Sticky nav scrolled state
+  var nav = document.getElementById('nav');
+  var onScroll = function () {
+    if (window.scrollY > 40) nav.classList.add('scrolled');
+    else nav.classList.remove('scrolled');
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // Mobile sheet with focus management
+  var sheet = document.getElementById('mobileSheet');
+  var panel = sheet.querySelector('.mobile-sheet__panel');
+  var burger = document.getElementById('burger');
+  var closeBtn = document.getElementById('sheetClose');
+  var lastFocused = null;
+
+  function getFocusable() {
+    return Array.prototype.slice.call(
+      panel.querySelectorAll('a[href], button:not([disabled])')
+    ).filter(function (el) { return el.offsetParent !== null; });
+  }
+
+  function openSheet() {
+    lastFocused = document.activeElement;
+    sheet.classList.add('open');
+    burger.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closeSheet() {
+    sheet.classList.remove('open');
+    burger.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+    if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+    else burger.focus();
+  }
+
+  burger.addEventListener('click', openSheet);
+  closeBtn.addEventListener('click', closeSheet);
+  sheet.addEventListener('click', function (e) {
+    if (e.target.hasAttribute('data-close')) closeSheet();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (!sheet.classList.contains('open')) return;
+    if (e.key === 'Escape') { closeSheet(); return; }
+    if (e.key === 'Tab') {
+      var focusable = getFocusable();
+      if (!focusable.length) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      } else if (!panel.contains(document.activeElement)) {
+        e.preventDefault(); first.focus();
+      }
+    }
+  });
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Scroll reveal + staggering
+  var reveals = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
+  if ('IntersectionObserver' in window && !reduceMotion) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var el = entry.target;
+          var parent = el.parentElement;
+          var siblings = Array.prototype.filter.call(parent.children, function (c) { return c.classList.contains('reveal'); });
+          var idx = siblings.indexOf(el);
+          el.style.transitionDelay = (idx > 0 ? Math.min(idx, 6) * 60 : 0) + 'ms';
+          el.classList.add('in');
+          io.unobserve(el);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    reveals.forEach(function (el) { io.observe(el); });
+  } else {
+    reveals.forEach(function (el) { el.classList.add('in'); });
+  }
+
+  // Count-up for purely-numeric stats. Stats with a non-unit suffix
+  // (data-static-suffix) skip the animation so we never render "3-day".
+  function animateCount(el) {
+    var target = parseFloat(el.getAttribute('data-count'));
+    if (isNaN(target)) return;
+    var staticSuffix = el.getAttribute('data-static-suffix');
+    if (staticSuffix !== null) { el.textContent = target + staticSuffix; return; }
+    if (reduceMotion || target === 0) { el.textContent = String(target); return; }
+    var dur = 1100, start = null;
+    function frame(ts) {
+      if (!start) start = ts;
+      var p = Math.min((ts - start) / dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = String(Math.round(target * eased));
+      if (p < 1) requestAnimationFrame(frame);
+      else el.textContent = String(target);
+    }
+    requestAnimationFrame(frame);
+  }
+  var stats = Array.prototype.slice.call(document.querySelectorAll('.stat__num[data-count]'));
+  if ('IntersectionObserver' in window) {
+    var sio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) { animateCount(entry.target); sio.unobserve(entry.target); }
+      });
+    }, { threshold: 0.5 });
+    stats.forEach(function (el) { sio.observe(el); });
+  } else {
+    stats.forEach(animateCount);
+  }
+})();
+</script>
+
+</body>
+</html>
