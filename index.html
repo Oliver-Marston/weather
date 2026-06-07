@@ -171,6 +171,17 @@ body {
 .rain-k { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t45); }
 .rain-v { font-size: 13px; font-weight: 600; margin-top: 2px; }
 
+/* History chart */
+.hist-ranges { display: flex; gap: 6px; margin: 10px 0 4px; flex-wrap: wrap; }
+.hist-summary { display: flex; gap: 18px; align-items: baseline; margin: 8px 0 6px; flex-wrap: wrap; }
+.hist-cur { font-size: 30px; font-weight: 300; line-height: 1; }
+.hist-cur span { font-size: 13px; color: var(--t60); font-weight: 400; }
+.hist-stat { font-size: 12px; color: var(--t60); }
+.hist-stat b { color: var(--text); font-weight: 600; font-size: 13px; }
+.hist-chart-wrap { width: 100%; }
+#histChart { width: 100%; height: 200px; display: block; }
+.hist-xaxis { display: flex; justify-content: space-between; font-size: 10px; color: var(--t45); margin-top: 4px; }
+
 /* UV scale bar */
 .scale-bar { height: 6px; border-radius: 3px; margin: 10px 0 6px; background: linear-gradient(90deg,#4ade80,#a3e635,#facc15,#fb923c,#f87171,#c084fc); position: relative; }
 .scale-dot { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid var(--bg-mid); transform: translate(-50%,-50%); transition: left 0.5s; }
@@ -277,6 +288,7 @@ body {
   <symbol id="ic-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
   <symbol id="ic-locate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></symbol>
   <symbol id="ic-sprout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M12 20v-9"/><path d="M12 11C12 7.5 9.5 5 5.5 5 5.5 8.5 8 11 12 11z"/><path d="M12 13c0-3 2.5-5 6.5-5 0 3.3-2.8 5-6.5 5z"/></symbol>
+  <symbol id="ic-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></symbol>
   <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
   <symbol id="ic-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
   <symbol id="ic-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
@@ -401,6 +413,31 @@ body {
       </div>
     </div>
     <iframe class="map-frame" id="mapFrame" src="" loading="lazy"></iframe>
+  </div>
+
+  <!-- History (full width) -->
+  <div class="card" id="historyCard">
+    <div class="map-head">
+      <div class="card-title" style="margin-bottom:0"><svg stroke="currentColor"><use href="#ic-chart"/></svg>History</div>
+      <div class="map-toggles" id="histMetrics">
+        <button class="map-toggle active" onclick="setHistMetric('temp',this)">Temp</button>
+        <button class="map-toggle" onclick="setHistMetric('humidity',this)">Humidity</button>
+        <button class="map-toggle" onclick="setHistMetric('pressure',this)">Pressure</button>
+        <button class="map-toggle" onclick="setHistMetric('wind_speed',this)">Wind</button>
+        <button class="map-toggle" onclick="setHistMetric('uv',this)">UV</button>
+        <button class="map-toggle" onclick="setHistMetric('rain_rate',this)">Rain</button>
+      </div>
+    </div>
+    <div class="hist-ranges" id="histRanges">
+      <button class="map-toggle active" onclick="setHistRange('1',this)">24h</button>
+      <button class="map-toggle" onclick="setHistRange('7',this)">7d</button>
+      <button class="map-toggle" onclick="setHistRange('30',this)">30d</button>
+      <button class="map-toggle" onclick="setHistRange('90',this)">90d</button>
+    </div>
+    <div class="hist-summary" id="histSummary"></div>
+    <div class="hist-chart-wrap"><svg id="histChart" viewBox="0 0 600 200"></svg></div>
+    <div class="hist-xaxis" id="histX"></div>
+    <div class="placeholder" id="histNote" style="display:none">Loading…</div>
   </div>
 
   <!-- Stat grid -->
@@ -531,6 +568,9 @@ const ECOWITT_KEY='19e71687-f879-409b-b97c-c6228954a8ba';
 const APP_KEY='E7DFEA21A613BF9B0C8F44E354C1C087';
 const MAC='8C:4F:00:4F:E6:77';
 const HOME_LAT=52.7868543, HOME_LON=-1.1251226;
+// Supabase (publishable/anon — safe to expose; read-only via RLS)
+const SUPABASE_URL='https://xysslvzlmpgmseimqito.supabase.co';
+const SUPABASE_ANON='sb_publishable_V8cr4rmElEYqHJZ9OAXQDw_Uw9r0tLs';
 
 const HOME_LOC={key:'home',lat:HOME_LAT,lon:HOME_LON,name:'Home',sub:'Burton-on-the-Wolds · Live station',top:'Home — Burton-on-the-Wolds',fixed:true};
 const HOME_RADIUS_KM=4; // inside this radius of home → use the live station, not the forecast API
@@ -620,6 +660,7 @@ function pickLoc(key){
   renderDrawer();
   updateMap(loc.lat,loc.lon);
   fetchAll();
+  fetchHistory();
 }
 
 function removeLoc(e,key){
@@ -673,6 +714,7 @@ function applyCurrentView(){
   renderDrawer();
   updateMap(loc.lat,loc.lon);
   fetchAll();
+  fetchHistory();
 }
 
 // ── Modal ──
@@ -967,6 +1009,60 @@ async function fetchSidebar(){
   }
 }
 
+// ── History charts (from Supabase) ──
+const HIST_METRICS={
+  temp:{label:'Temperature',unit:'°',color:'#ff8a3d',conv:v=>v,dec:1},
+  humidity:{label:'Humidity',unit:'%',color:'#aaddff',conv:v=>v,dec:0},
+  pressure:{label:'Pressure',unit:' hPa',color:'#c9b3ff',conv:v=>v,dec:0},
+  wind_speed:{label:'Wind',unit:' mph',color:'#2ce0d0',conv:v=>kmh2mph(v),dec:0},
+  uv:{label:'UV',unit:'',color:'#facc15',conv:v=>v,dec:1},
+  rain_rate:{label:'Rain rate',unit:' mm/h',color:'#7dd3fc',conv:v=>v,dec:1},
+};
+let histMetric='temp', histRange='1', _histData=null;
+function histLocKey(){ if(currentLoc==='current') return (currentGeoLoc&&currentGeoLoc.atHome)?'home':null; return currentLoc; }
+function setHistMetric(m,btn){ histMetric=m; document.querySelectorAll('#histMetrics .map-toggle').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); fetchHistory(); }
+function setHistRange(r,btn){ histRange=r; document.querySelectorAll('#histRanges .map-toggle').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); fetchHistory(); }
+
+async function fetchHistory(){
+  const note=$('histNote'); const key=histLocKey();
+  const clear=(msg)=>{ $('histChart').innerHTML=''; $('histSummary').innerHTML=''; $('histX').innerHTML=''; _histData=null; note.style.display='block'; note.textContent=msg; };
+  if(!SUPABASE_URL||!SUPABASE_ANON){ clear('History not configured.'); return; }
+  if(!key){ clear('No history for this location.'); return; }
+  const days=parseInt(histRange,10), cfg=HIST_METRICS[histMetric];
+  const since=new Date(Date.now()-days*86400000).toISOString();
+  try{
+    const url=`${SUPABASE_URL}/rest/v1/readings?location_key=eq.${key}&observed_at=gte.${since}&select=observed_at,${histMetric}&order=observed_at.asc&limit=20000`;
+    const data=await(await fetch(url,{headers:{apikey:SUPABASE_ANON,Authorization:`Bearer ${SUPABASE_ANON}`}})).json();
+    if(!Array.isArray(data)){ clear('History unavailable.'); return; }
+    const pts=data.filter(r=>r[histMetric]!=null).map(r=>({t:new Date(r.observed_at).getTime(),v:cfg.conv(r[histMetric])}));
+    if(!pts.length){ clear('No data in this range yet.'); return; }
+    note.style.display='none'; _histData={pts,cfg}; drawHistory(pts,cfg);
+  }catch(e){ clear('History unavailable.'); }
+}
+
+function drawHistory(pts,cfg){
+  const MAX=400; let s=pts;
+  if(pts.length>MAX){ const step=pts.length/MAX; s=[]; for(let i=0;i<MAX;i++) s.push(pts[Math.floor(i*step)]); s.push(pts[pts.length-1]); }
+  const wrap=$('histChart'); const W=Math.max(280,Math.round(wrap.clientWidth)||600), H=200;
+  const padT=14,padB=8,padL=4,padR=4;
+  const vals=s.map(p=>p.v); let mn=Math.min(...vals), mx=Math.max(...vals);
+  if(mn===mx){ mn-=1; mx+=1; }
+  const t0=s[0].t, t1=s[s.length-1].t>t0?s[s.length-1].t:t0+1;
+  const x=t=>padL+((t-t0)/(t1-t0))*(W-padL-padR);
+  const y=v=>padT+(1-(v-mn)/(mx-mn))*(H-padT-padB);
+  let line=''; s.forEach((p,i)=>{ line+=(i?'L':'M')+x(p.t).toFixed(1)+' '+y(p.v).toFixed(1)+' '; });
+  const area=`M${x(s[0].t).toFixed(1)} ${(H-padB).toFixed(1)} `+s.map(p=>`L${x(p.t).toFixed(1)} ${y(p.v).toFixed(1)}`).join(' ')+` L${x(s[s.length-1].t).toFixed(1)} ${(H-padB).toFixed(1)} Z`;
+  const grid=[mn,(mn+mx)/2,mx].map(v=>`<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W-padR}" y2="${y(v).toFixed(1)}" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>`).join('');
+  const last=s[s.length-1];
+  wrap.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  wrap.innerHTML=`<defs><linearGradient id="histGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${cfg.color}" stop-opacity="0.35"/><stop offset="100%" stop-color="${cfg.color}" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#histGrad)"/><path d="${line}" fill="none" stroke="${cfg.color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/><circle cx="${x(last.t).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="3.5" fill="${cfg.color}"/>`;
+  const avg=vals.reduce((a,b)=>a+b,0)/vals.length, fmt=v=>v.toFixed(cfg.dec)+cfg.unit;
+  $('histSummary').innerHTML=`<div class="hist-cur">${fmt(last.v)}<span> latest</span></div><div class="hist-stat">Min <b>${fmt(mn)}</b></div><div class="hist-stat">Avg <b>${fmt(avg)}</b></div><div class="hist-stat">Max <b>${fmt(mx)}</b></div>`;
+  const opt=parseInt(histRange,10)<=1?{hour:'2-digit',minute:'2-digit'}:{day:'2-digit',month:'short'};
+  $('histX').innerHTML=`<span>${new Date(t0).toLocaleString([],opt)}</span><span>${new Date((t0+t1)/2).toLocaleString([],opt)}</span><span>${new Date(t1).toLocaleString([],opt)}</span>`;
+}
+let _histResizeT; window.addEventListener('resize',()=>{ clearTimeout(_histResizeT); _histResizeT=setTimeout(()=>{ if(_histData) drawHistory(_histData.pts,_histData.cfg); },200); });
+
 // ── Master fetch ──
 async function fetchAll(){
   const btn=$('refreshBtn'); btn.classList.add('spin');
@@ -981,12 +1077,13 @@ async function fetchAll(){
 }
 
 // ── App version / updates ──
-const APP_BUILD='v9 · 2026-06-07';
+const APP_BUILD='v10 · 2026-06-07';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
 async function manualRefresh(){
   fetchAll();
+  fetchHistory();
   if('serviceWorker' in navigator){
     try{ const reg=await navigator.serviceWorker.getRegistration(); if(reg) reg.update(); }catch(e){}
   }
@@ -1007,6 +1104,7 @@ renderDrawer();
 updateMap(HOME_LAT,HOME_LON);
 setHomeCards(true);
 fetchAll();
+fetchHistory();
 setInterval(fetchAll,60000);
 </script>
 </body>
