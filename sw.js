@@ -1,6 +1,6 @@
 // Service worker — network-first so the installed (home-screen) app
 // always shows the latest version when online, with offline fallback.
-const VERSION = 'v10';
+const VERSION = 'v12';
 const CACHE = 'weather-' + VERSION;
 
 self.addEventListener('install', () => self.skipWaiting());

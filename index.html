@@ -173,14 +173,24 @@ body {
 
 /* History chart */
 .hist-ranges { display: flex; gap: 6px; margin: 10px 0 4px; flex-wrap: wrap; }
-.hist-summary { display: flex; gap: 18px; align-items: baseline; margin: 8px 0 6px; flex-wrap: wrap; }
-.hist-cur { font-size: 30px; font-weight: 300; line-height: 1; }
-.hist-cur span { font-size: 13px; color: var(--t60); font-weight: 400; }
+.hist-locs { display: flex; gap: 6px; margin: 8px 0 4px; flex-wrap: wrap; }
+.hist-loc-chip { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.1); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: var(--t45); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+.hist-loc-chip.active { color: #fff; background: rgba(255,255,255,0.2); }
+.hist-loc-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.hist-summary { display: flex; gap: 8px 18px; align-items: center; margin: 8px 0 6px; flex-wrap: wrap; min-height: 22px; }
+.hist-leg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--t60); }
+.hist-leg-item .dot { width: 10px; height: 10px; border-radius: 50%; }
+.hist-leg-item b { color: var(--text); font-weight: 700; font-size: 13px; }
 .hist-stat { font-size: 12px; color: var(--t60); }
 .hist-stat b { color: var(--text); font-weight: 600; font-size: 13px; }
-.hist-chart-wrap { width: 100%; }
-#histChart { width: 100%; height: 200px; display: block; }
+.hist-chart-wrap { width: 100%; position: relative; touch-action: pan-y; }
+#histChart { width: 100%; height: 210px; display: block; }
 .hist-xaxis { display: flex; justify-content: space-between; font-size: 10px; color: var(--t45); margin-top: 4px; }
+.hist-tip { position: absolute; pointer-events: none; background: rgba(8,28,48,0.94); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; font-size: 11px; line-height: 1.5; transform: translate(-50%, 0); white-space: nowrap; opacity: 0; transition: opacity 0.1s; z-index: 5; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+.hist-tip .tip-t { color: var(--t60); margin-bottom: 3px; font-weight: 600; }
+.hist-tip .tip-row { display: flex; align-items: center; gap: 6px; }
+.hist-tip .tip-row .dot { width: 8px; height: 8px; border-radius: 50%; }
+.hist-tip .tip-row b { margin-left: auto; font-weight: 700; }
 
 /* UV scale bar */
 .scale-bar { height: 6px; border-radius: 3px; margin: 10px 0 6px; background: linear-gradient(90deg,#4ade80,#a3e635,#facc15,#fb923c,#f87171,#c084fc); position: relative; }
@@ -429,13 +439,18 @@ body {
       </div>
     </div>
     <div class="hist-ranges" id="histRanges">
-      <button class="map-toggle active" onclick="setHistRange('1',this)">24h</button>
-      <button class="map-toggle" onclick="setHistRange('7',this)">7d</button>
+      <button class="map-toggle" onclick="setHistRange('1',this)">24h</button>
+      <button class="map-toggle active" onclick="setHistRange('7',this)">7d</button>
       <button class="map-toggle" onclick="setHistRange('30',this)">30d</button>
       <button class="map-toggle" onclick="setHistRange('90',this)">90d</button>
+      <button class="map-toggle" onclick="setHistRange('365',this)">1y</button>
     </div>
+    <div class="hist-locs" id="histLocs"></div>
     <div class="hist-summary" id="histSummary"></div>
-    <div class="hist-chart-wrap"><svg id="histChart" viewBox="0 0 600 200"></svg></div>
+    <div class="hist-chart-wrap" id="histWrap">
+      <svg id="histChart" viewBox="0 0 600 210"></svg>
+      <div class="hist-tip" id="histTip"></div>
+    </div>
     <div class="hist-xaxis" id="histX"></div>
     <div class="placeholder" id="histNote" style="display:none">Loading…</div>
   </div>
@@ -660,7 +675,7 @@ function pickLoc(key){
   renderDrawer();
   updateMap(loc.lat,loc.lon);
   fetchAll();
-  fetchHistory();
+  resetHistLocs(); renderHistLocs(); fetchHistory();
 }
 
 function removeLoc(e,key){
@@ -668,7 +683,11 @@ function removeLoc(e,key){
   userLocs=userLocs.filter(l=>l.key!==key);
   saveLocs(userLocs);
   if(currentLoc===key) pickLoc('home');
-  else { renderDrawer(); fetchSidebar(); }
+  else {
+    renderDrawer(); fetchSidebar();
+    if(histLocsSel.has(key)){ histLocsSel.delete(key); if(!histLocsSel.size) resetHistLocs(); fetchHistory(); }
+    renderHistLocs();
+  }
 }
 
 // ── Current location (device geolocation) ──
@@ -714,7 +733,7 @@ function applyCurrentView(){
   renderDrawer();
   updateMap(loc.lat,loc.lon);
   fetchAll();
-  fetchHistory();
+  resetHistLocs(); renderHistLocs(); fetchHistory();
 }
 
 // ── Modal ──
@@ -750,7 +769,7 @@ function updateMap(lat,lon){
 }
 function setMapLayer(layer,btn){
   mapLayer=layer;
-  document.querySelectorAll('.map-toggle').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#mapToggles .map-toggle').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   const loc=locByKey(currentLoc);
   if(loc) updateMap(loc.lat,loc.lon);
@@ -1011,57 +1030,152 @@ async function fetchSidebar(){
 
 // ── History charts (from Supabase) ──
 const HIST_METRICS={
-  temp:{label:'Temperature',unit:'°',color:'#ff8a3d',conv:v=>v,dec:1},
-  humidity:{label:'Humidity',unit:'%',color:'#aaddff',conv:v=>v,dec:0},
-  pressure:{label:'Pressure',unit:' hPa',color:'#c9b3ff',conv:v=>v,dec:0},
-  wind_speed:{label:'Wind',unit:' mph',color:'#2ce0d0',conv:v=>kmh2mph(v),dec:0},
-  uv:{label:'UV',unit:'',color:'#facc15',conv:v=>v,dec:1},
-  rain_rate:{label:'Rain rate',unit:' mm/h',color:'#7dd3fc',conv:v=>v,dec:1},
+  temp:{label:'Temperature',unit:'°',conv:v=>v,dec:1},
+  humidity:{label:'Humidity',unit:'%',conv:v=>v,dec:0},
+  pressure:{label:'Pressure',unit:' hPa',conv:v=>v,dec:0},
+  wind_speed:{label:'Wind',unit:' mph',conv:v=>kmh2mph(v),dec:0},
+  uv:{label:'UV',unit:'',conv:v=>v,dec:1},
+  rain_rate:{label:'Rain rate',unit:' mm/h',conv:v=>v,dec:1},
 };
-let histMetric='temp', histRange='1', _histData=null;
-function histLocKey(){ if(currentLoc==='current') return (currentGeoLoc&&currentGeoLoc.atHome)?'home':null; return currentLoc; }
+const HIST_PALETTE=['#ff8a3d','#2ce0d0','#aaddff','#facc15','#c084fc','#7de87d','#fb7185','#7dd3fc'];
+// Stable colour per location (hash of key) so adding/removing favourites never recolours others. Home is pinned.
+function locColor(key){ if(key==='home') return HIST_PALETTE[0]; let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0; return HIST_PALETTE[1+(h%(HIST_PALETTE.length-1))]; }
+let histMetric='temp', histRange='7';
+let histLocsSel=new Set(['home']);
+let _hist=null, _histRaw=null, _histReq=0;
+
+function defaultHistKey(){ if(currentLoc==='current') return (currentGeoLoc&&currentGeoLoc.atHome)?'home':null; return currentLoc; }
+function resetHistLocs(){ const k=defaultHistKey()||'home'; histLocsSel = new Set([k]); } // away 'current' has no station → fall back to Home
 function setHistMetric(m,btn){ histMetric=m; document.querySelectorAll('#histMetrics .map-toggle').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); fetchHistory(); }
 function setHistRange(r,btn){ histRange=r; document.querySelectorAll('#histRanges .map-toggle').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); fetchHistory(); }
+function toggleHistLoc(key){ if(histLocsSel.has(key)){ if(histLocsSel.size>1) histLocsSel.delete(key); } else histLocsSel.add(key); renderHistLocs(); fetchHistory(); }
+function renderHistLocs(){
+  const el=$('histLocs'); if(!el) return;
+  el.innerHTML=allLocs().map(l=>`<button class="hist-loc-chip ${histLocsSel.has(l.key)?'active':''}" onclick="toggleHistLoc('${l.key}')"><span class="hist-loc-dot" style="background:${locColor(l.key)}"></span>${l.key==='home'?'Home':l.name}</button>`).join('');
+}
 
 async function fetchHistory(){
-  const note=$('histNote'); const key=histLocKey();
-  const clear=(msg)=>{ $('histChart').innerHTML=''; $('histSummary').innerHTML=''; $('histX').innerHTML=''; _histData=null; note.style.display='block'; note.textContent=msg; };
+  const note=$('histNote');
+  const myReq=++_histReq; // ignore responses that arrive after a newer request
+  const clear=(msg)=>{ if(myReq!==_histReq) return; $('histChart').innerHTML=''; $('histSummary').innerHTML=''; $('histX').innerHTML=''; $('histTip').style.opacity=0; _hist=null; _histRaw=null; note.style.display='block'; note.textContent=msg; };
   if(!SUPABASE_URL||!SUPABASE_ANON){ clear('History not configured.'); return; }
-  if(!key){ clear('No history for this location.'); return; }
+  const keys=[...histLocsSel].filter(k=>allLocs().some(l=>l.key===k));
+  if(!keys.length){ clear('No history for this location.'); return; }
   const days=parseInt(histRange,10), cfg=HIST_METRICS[histMetric];
   const since=new Date(Date.now()-days*86400000).toISOString();
   try{
-    const url=`${SUPABASE_URL}/rest/v1/readings?location_key=eq.${key}&observed_at=gte.${since}&select=observed_at,${histMetric}&order=observed_at.asc&limit=20000`;
-    const data=await(await fetch(url,{headers:{apikey:SUPABASE_ANON,Authorization:`Bearer ${SUPABASE_ANON}`}})).json();
-    if(!Array.isArray(data)){ clear('History unavailable.'); return; }
-    const pts=data.filter(r=>r[histMetric]!=null).map(r=>({t:new Date(r.observed_at).getTime(),v:cfg.conv(r[histMetric])}));
-    if(!pts.length){ clear('No data in this range yet.'); return; }
-    note.style.display='none'; _histData={pts,cfg}; drawHistory(pts,cfg);
+    const series=await Promise.all(keys.map(async key=>{
+      const loc=allLocs().find(l=>l.key===key);
+      const pts=await histSeries(key,since,cfg);
+      return {key,name:(key==='home'?'Home':(loc?loc.name:key)),color:locColor(key),pts};
+    }));
+    if(myReq!==_histReq) return; // a newer request superseded this one
+    const have=series.filter(s=>s.pts.length);
+    if(!have.length){ clear('No data in this range yet.'); return; }
+    note.style.display='none'; _histRaw={series:have,cfg,days,keys}; drawHistory(have,cfg,days,keys);
   }catch(e){ clear('History unavailable.'); }
 }
 
-function drawHistory(pts,cfg){
-  const MAX=400; let s=pts;
-  if(pts.length>MAX){ const step=pts.length/MAX; s=[]; for(let i=0;i<MAX;i++) s.push(pts[Math.floor(i*step)]); s.push(pts[pts.length-1]); }
-  const wrap=$('histChart'); const W=Math.max(280,Math.round(wrap.clientWidth)||600), H=200;
-  const padT=14,padB=8,padL=4,padR=4;
-  const vals=s.map(p=>p.v); let mn=Math.min(...vals), mx=Math.max(...vals);
-  if(mn===mx){ mn-=1; mx+=1; }
-  const t0=s[0].t, t1=s[s.length-1].t>t0?s[s.length-1].t:t0+1;
-  const x=t=>padL+((t-t0)/(t1-t0))*(W-padL-padR);
-  const y=v=>padT+(1-(v-mn)/(mx-mn))*(H-padT-padB);
-  let line=''; s.forEach((p,i)=>{ line+=(i?'L':'M')+x(p.t).toFixed(1)+' '+y(p.v).toFixed(1)+' '; });
-  const area=`M${x(s[0].t).toFixed(1)} ${(H-padB).toFixed(1)} `+s.map(p=>`L${x(p.t).toFixed(1)} ${y(p.v).toFixed(1)}`).join(' ')+` L${x(s[s.length-1].t).toFixed(1)} ${(H-padB).toFixed(1)} Z`;
-  const grid=[mn,(mn+mx)/2,mx].map(v=>`<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W-padR}" y2="${y(v).toFixed(1)}" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>`).join('');
-  const last=s[s.length-1];
-  wrap.setAttribute('viewBox',`0 0 ${W} ${H}`);
-  wrap.innerHTML=`<defs><linearGradient id="histGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${cfg.color}" stop-opacity="0.35"/><stop offset="100%" stop-color="${cfg.color}" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#histGrad)"/><path d="${line}" fill="none" stroke="${cfg.color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/><circle cx="${x(last.t).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="3.5" fill="${cfg.color}"/>`;
-  const avg=vals.reduce((a,b)=>a+b,0)/vals.length, fmt=v=>v.toFixed(cfg.dec)+cfg.unit;
-  $('histSummary').innerHTML=`<div class="hist-cur">${fmt(last.v)}<span> latest</span></div><div class="hist-stat">Min <b>${fmt(mn)}</b></div><div class="hist-stat">Avg <b>${fmt(avg)}</b></div><div class="hist-stat">Max <b>${fmt(mx)}</b></div>`;
-  const opt=parseInt(histRange,10)<=1?{hour:'2-digit',minute:'2-digit'}:{day:'2-digit',month:'short'};
-  $('histX').innerHTML=`<span>${new Date(t0).toLocaleString([],opt)}</span><span>${new Date((t0+t1)/2).toLocaleString([],opt)}</span><span>${new Date(t1).toLocaleString([],opt)}</span>`;
+// Fetch one location's series: server-side downsampling RPC, with a
+// capped-query fallback (newest 1000) if the RPC isn't available yet.
+async function histSeries(key,since,cfg){
+  const H={apikey:SUPABASE_ANON,Authorization:`Bearer ${SUPABASE_ANON}`,'Content-Type':'application/json'};
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_history`,{method:'POST',headers:H,body:JSON.stringify({p_location:key,p_metric:histMetric,p_since:since,p_buckets:300})});
+    if(r.ok){ const d=await r.json(); if(Array.isArray(d)) return d.filter(x=>x.value!=null).map(x=>({t:new Date(x.bucket).getTime(),v:cfg.conv(x.value)})); }
+  }catch(e){}
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/readings?location_key=eq.${key}&observed_at=gte.${since}&select=observed_at,${histMetric}&order=observed_at.desc&limit=1000`,{headers:H});
+    const d=await r.json(); if(Array.isArray(d)) return d.filter(x=>x[histMetric]!=null).map(x=>({t:new Date(x.observed_at).getTime(),v:cfg.conv(x[histMetric])})).reverse();
+  }catch(e){}
+  return [];
 }
-let _histResizeT; window.addEventListener('resize',()=>{ clearTimeout(_histResizeT); _histResizeT=setTimeout(()=>{ if(_histData) drawHistory(_histData.pts,_histData.cfg); },200); });
+
+function niceTicks(min,max,n){
+  const span=(max-min)||1, step0=span/n, mag=Math.pow(10,Math.floor(Math.log10(step0))), norm=step0/mag;
+  let step=(norm<1.5?1:norm<3?2:norm<7?5:10)*mag;
+  const lo=Math.floor(min/step)*step, hi=Math.ceil(max/step)*step, ticks=[];
+  for(let v=lo; v<=hi+step*0.5; v+=step) ticks.push(+v.toFixed(6));
+  return {ticks,lo,hi,step};
+}
+function downsample(pts,max){ if(pts.length<=max) return pts; const step=pts.length/max, out=[]; for(let i=0;i<max;i++) out.push(pts[Math.floor(i*step)]); out.push(pts[pts.length-1]); return out; }
+
+function drawHistory(seriesIn,cfg,days,selKeys){
+  selKeys=selKeys||seriesIn.map(s=>s.key);
+  const svg=$('histChart'); const W=Math.max(280,Math.round(svg.clientWidth)||600), H=210;
+  const padT=12,padB=22,padL=42,padR=10;
+  const series=seriesIn.map(s=>({...s,raw:s.pts,pts:downsample(s.pts,400)}));
+  let mn=Infinity,mx=-Infinity; series.forEach(s=>s.pts.forEach(p=>{ if(p.v<mn)mn=p.v; if(p.v>mx)mx=p.v; }));
+  if(!isFinite(mn)){ mn=0; mx=1; } if(mn===mx){ mn-=1; mx+=1; }
+  const {ticks,lo,hi,step}=niceTicks(mn,mx,4);
+  const dp=Math.max(0,Math.min(4,-Math.floor(Math.log10(step)))); // tick label decimals from the step size
+  const t1=Date.now(), t0=t1-days*86400000;
+  const x=t=>{ const u=Math.max(0,Math.min(1,(t-t0)/(t1-t0))); return padL+u*(W-padL-padR); }; // clamped to plot area
+  const y=v=>padT+(1-(v-lo)/((hi-lo)||1))*(H-padT-padB);
+  let grid='',ylab='';
+  ticks.forEach(tv=>{ const Y=y(tv); grid+=`<line x1="${padL}" y1="${Y.toFixed(1)}" x2="${W-padR}" y2="${Y.toFixed(1)}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>`; ylab+=`<text x="${padL-6}" y="${(Y+3).toFixed(1)}" text-anchor="end" font-size="10" fill="rgba(255,255,255,0.5)" font-family="Inter">${tv.toFixed(dp)}</text>`; });
+  let paths='',defs=''; const screen=[];
+  series.forEach((s)=>{
+    const sp=s.pts.map(p=>({t:p.t,v:p.v,x:x(p.t),y:y(p.v)})); screen.push({key:s.key,name:s.name,color:s.color,sp});
+    let d=''; sp.forEach((p,i)=>{ d+=(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)+' '; });
+    if(series.length===1){
+      defs=`<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${s.color}" stop-opacity="0.32"/><stop offset="100%" stop-color="${s.color}" stop-opacity="0"/></linearGradient></defs>`;
+      const area=`M${sp[0].x.toFixed(1)} ${(H-padB).toFixed(1)} `+sp.map(p=>`L${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')+` L${sp[sp.length-1].x.toFixed(1)} ${(H-padB).toFixed(1)} Z`;
+      paths+=`<path d="${area}" fill="url(#hg)"/>`;
+    }
+    paths+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+  });
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.innerHTML=defs+grid+ylab+`<line id="histCross" x1="0" y1="${padT}" x2="0" y2="${H-padB}" stroke="rgba(255,255,255,0.55)" stroke-width="1" style="opacity:0"/>`+paths+`<g id="histDots"></g>`;
+  _hist={screen,W,H,padL,padR,padT,padB,t0,t1,cfg};
+  const fmt=v=>v.toFixed(cfg.dec)+cfg.unit;
+  let leg='';
+  series.forEach(s=>{ const last=s.raw[s.raw.length-1]; leg+=`<div class="hist-leg-item"><span class="dot" style="background:${s.color}"></span>${s.name} <b>${fmt(last.v)}</b></div>`; });
+  if(selKeys.length===1 && series.length===1){ const vals=series[0].raw.map(p=>p.v); const avg=vals.reduce((a,b)=>a+b,0)/vals.length; leg+=`<div class="hist-stat">Min <b>${fmt(Math.min(...vals))}</b></div><div class="hist-stat">Avg <b>${fmt(avg)}</b></div><div class="hist-stat">Max <b>${fmt(Math.max(...vals))}</b></div>`; }
+  const drawn=new Set(series.map(s=>s.key)); const dropped=selKeys.filter(k=>!drawn.has(k)).map(k=>{const l=allLocs().find(x=>x.key===k);return k==='home'?'Home':(l?l.name:k);});
+  if(dropped.length) leg+=`<div class="hist-stat" style="color:var(--t45)">No data: ${dropped.join(', ')}</div>`;
+  $('histSummary').innerHTML=leg;
+  const opt=days<=1?{hour:'2-digit',minute:'2-digit'}:days<=30?{day:'2-digit',month:'short'}:{month:'short',year:'2-digit'};
+  let xl=''; for(let i=0;i<5;i++){ xl+=`<span>${new Date(t0+(t1-t0)*i/4).toLocaleString([],opt)}</span>`; }
+  $('histX').innerHTML=xl;
+}
+
+function histHover(clientX){
+  if(!_hist) return; const svg=$('histChart'), tip=$('histTip');
+  const rect=svg.getBoundingClientRect(); if(!rect.width) return;
+  const ux=(clientX-rect.left)*(_hist.W/rect.width);
+  if(ux<_hist.padL-2||ux>_hist.W-_hist.padR+2){ histHoverEnd(); return; }
+  const cross=document.getElementById('histCross'); if(cross){ cross.setAttribute('x1',ux.toFixed(1)); cross.setAttribute('x2',ux.toFixed(1)); cross.style.opacity=1; }
+  const dg=document.getElementById('histDots');
+  let dots='',rows='';
+  _hist.screen.forEach(s=>{
+    if(!s.sp.length) return;
+    let best=s.sp[0]; for(const p of s.sp){ if(Math.abs(p.x-ux)<Math.abs(best.x-ux)) best=p; }
+    // don't snap across data gaps: skip if the nearest point is far (> 1.5× median sample spacing)
+    let med=Infinity; if(s.sp.length>1){ const dxs=[]; for(let i=1;i<s.sp.length;i++) dxs.push(s.sp[i].x-s.sp[i-1].x); dxs.sort((a,b)=>a-b); med=dxs[Math.floor(dxs.length/2)]; }
+    if(Math.abs(best.x-ux)>Math.max(10,med*1.5)) return;
+    dots+=`<circle cx="${best.x.toFixed(1)}" cy="${best.y.toFixed(1)}" r="4" fill="${s.color}" stroke="#0b2235" stroke-width="1.5"/>`;
+    rows+=`<div class="tip-row"><span class="dot" style="background:${s.color}"></span>${s.name}<b>${best.v.toFixed(_hist.cfg.dec)+_hist.cfg.unit}</b></div>`;
+  });
+  if(dg) dg.innerHTML=dots;
+  if(!rows){ tip.style.opacity=0; return; }
+  // header time = the crosshair position (consistent across series), not any one series' nearest point
+  const headerT=_hist.t0+((ux-_hist.padL)/((_hist.W-_hist.padL-_hist.padR)||1))*(_hist.t1-_hist.t0);
+  const days=parseInt(histRange,10); const opt=days<=1?{weekday:'short',hour:'2-digit',minute:'2-digit'}:{day:'2-digit',month:'short',year:'2-digit'};
+  tip.innerHTML=`<div class="tip-t">${new Date(headerT).toLocaleString([],opt)}</div>${rows}`;
+  const cssX=clientX-rect.left, half=(tip.offsetWidth||92)/2+4;
+  tip.style.left=Math.max(half,Math.min(rect.width-half,cssX))+'px'; tip.style.top='4px'; tip.style.opacity=1;
+}
+function histHoverEnd(){ const tip=$('histTip'); if(tip) tip.style.opacity=0; const c=document.getElementById('histCross'); if(c)c.style.opacity=0; const dg=document.getElementById('histDots'); if(dg)dg.innerHTML=''; }
+(function bindHist(){
+  const svg=$('histChart'); if(!svg) return;
+  svg.addEventListener('mousemove',e=>histHover(e.clientX));
+  svg.addEventListener('mouseleave',histHoverEnd);
+  svg.addEventListener('touchstart',e=>{ if(e.touches[0]) histHover(e.touches[0].clientX); },{passive:true});
+  svg.addEventListener('touchmove',e=>{ if(e.touches[0]) histHover(e.touches[0].clientX); },{passive:true});
+  svg.addEventListener('touchend',histHoverEnd);
+})();
+let _histResizeT; window.addEventListener('resize',()=>{ clearTimeout(_histResizeT); _histResizeT=setTimeout(()=>{ if(_histRaw) drawHistory(_histRaw.series,_histRaw.cfg,_histRaw.days,_histRaw.keys); },200); });
 
 // ── Master fetch ──
 async function fetchAll(){
@@ -1077,7 +1191,7 @@ async function fetchAll(){
 }
 
 // ── App version / updates ──
-const APP_BUILD='v10 · 2026-06-07';
+const APP_BUILD='v12 · 2026-06-07';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
@@ -1104,7 +1218,7 @@ renderDrawer();
 updateMap(HOME_LAT,HOME_LON);
 setHomeCards(true);
 fetchAll();
-fetchHistory();
+resetHistLocs(); renderHistLocs(); fetchHistory();
 setInterval(fetchAll,60000);
 </script>
 </body>

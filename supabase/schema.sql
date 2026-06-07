@@ -70,3 +70,36 @@ create policy "anon delete locations" on locations for delete using (true);
 -- NOTE: readings are inserted by the GitHub Action using the service_role
 -- key, which bypasses RLS — so there is intentionally no anon write policy
 -- on readings (nobody can forge data with the public key).
+
+-- ── Downsampled history for charts ──────────────────────────────
+-- PostgREST caps responses at 1000 rows, so we bucket + average
+-- server-side and return ~p_buckets points for any time range.
+create or replace function get_history(
+  p_location text,
+  p_metric   text,
+  p_since    timestamptz,
+  p_buckets  int default 300
+) returns table(bucket timestamptz, value double precision)
+language plpgsql stable as $$
+declare
+  allowed text[] := array['temp','feels_like','humidity','dew_point','pressure','pressure_abs',
+                          'wind_speed','wind_gust','wind_dir','uv','solar','rain_rate','rain_daily',
+                          'indoor_temp','indoor_humidity','soil_moisture','vpd'];
+  width_s double precision;
+begin
+  if not (p_metric = any(allowed)) then
+    raise exception 'invalid metric %', p_metric;
+  end if;
+  width_s := greatest(60, extract(epoch from (now() - p_since)) / greatest(p_buckets, 1));
+  return query execute format(
+    'select to_timestamp(floor(extract(epoch from observed_at)/%1$s)*%1$s) as bucket,
+            avg(%2$I)::double precision as value
+       from readings
+      where location_key = %3$L and observed_at >= %4$L and %2$I is not null
+      group by 1 order by 1',
+    width_s, p_metric, p_location, p_since
+  );
+end;
+$$;
+
+grant execute on function get_history(text,text,timestamptz,int) to anon, authenticated;
