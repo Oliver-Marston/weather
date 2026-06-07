@@ -165,6 +165,12 @@ body {
 .stat-desc { font-size: 12px; color: var(--t60); margin-top: 8px; line-height: 1.4; }
 .card-fill { display: flex; flex-direction: column; min-height: 130px; }
 
+/* Rainfall breakdown grid */
+.rain-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 8px; margin-top: 10px; }
+.rain-cell { background: rgba(255,255,255,0.08); border-radius: 8px; padding: 6px 8px; }
+.rain-k { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t45); }
+.rain-v { font-size: 13px; font-weight: 600; margin-top: 2px; }
+
 /* UV scale bar */
 .scale-bar { height: 6px; border-radius: 3px; margin: 10px 0 6px; background: linear-gradient(90deg,#4ade80,#a3e635,#facc15,#fb923c,#f87171,#c084fc); position: relative; }
 .scale-dot { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid var(--bg-mid); transform: translate(-50%,-50%); transition: left 0.5s; }
@@ -270,6 +276,7 @@ body {
   <symbol id="ic-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></symbol>
   <symbol id="ic-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
   <symbol id="ic-locate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></symbol>
+  <symbol id="ic-sprout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M12 20v-9"/><path d="M12 11C12 7.5 9.5 5 5.5 5 5.5 8.5 8 11 12 11z"/><path d="M12 13c0-3 2.5-5 6.5-5 0 3.3-2.8 5-6.5 5z"/></symbol>
   <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
   <symbol id="ic-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
   <symbol id="ic-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
@@ -429,6 +436,7 @@ body {
       <div class="stat-big" id="precipVal">-- mm</div>
       <div class="stat-sub" id="precipSub">Today</div>
       <div class="stat-desc" id="precipDesc">—</div>
+      <div class="rain-grid" id="rainBreakdown"></div>
     </div>
     <!-- Humidity -->
     <div class="card card-fill">
@@ -448,7 +456,7 @@ body {
           <text x="65" y="80" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="8" font-family="Inter">hPa</text>
         </svg>
       </div>
-      <div class="sun-times"><span>Low</span><span id="presTrend">—</span><span>High</span></div>
+      <div class="sun-times"><span id="presAbs"></span><span id="presTrend">—</span></div>
     </div>
     <!-- Visibility -->
     <div class="card card-fill">
@@ -484,13 +492,22 @@ body {
     <div class="card card-fill" id="indoorCard">
       <div class="card-title"><svg stroke="currentColor"><use href="#ic-indoor"/></svg>Indoor</div>
       <div class="stat-big" id="inTemp">--°</div>
-      <div class="stat-desc">Humidity: <span id="inHum">--%</span></div>
+      <div class="stat-desc">Humidity: <span id="inHum">--%</span> · Dew <span id="inDew">--°</span></div>
+      <div class="stat-desc">VPD: <span id="vpdVal">—</span></div>
+    </div>
+    <!-- Soil moisture (home only) -->
+    <div class="card card-fill" id="soilCard">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-sprout"/></svg>Soil Moisture</div>
+      <div class="stat-big" id="soilVal">--%</div>
+      <div id="soilDesc" style="font-size:14px;font-weight:600">—</div>
+      <div class="scale-bar" style="background:linear-gradient(90deg,#c9a36a,#a3e635,#4ade80,#22d3ee)"><div class="scale-dot" id="soilDot" style="left:0%"></div></div>
     </div>
     <!-- Station (home only) -->
     <div class="card card-fill" id="stationCard">
       <div class="card-title"><svg stroke="currentColor"><use href="#ic-battery"/></svg>Station</div>
       <div class="stat-big" style="font-size:24px" id="battVal">OK</div>
       <div class="stat-desc">Solar: <span id="solarVal">-- W/m²</span></div>
+      <div class="stat-desc">Capacitor: <span id="capVal">—</span> · Soil batt: <span id="soilBatt">—</span></div>
     </div>
   </div>
 
@@ -557,6 +574,8 @@ function wmoIcon(c){ if(c===0)return'ic-sun';if(c<=2)return'ic-partly';if(c<=3)r
 function wmoLabel(c){ if(c===0)return'Clear sky';if(c<=2)return'Partly cloudy';if(c<=3)return'Overcast';if(c<=49)return'Fog';if(c<=59)return'Drizzle';if(c<=69)return'Rain';if(c<=79)return'Snow';if(c<=82)return'Rain showers';if(c<=86)return'Snow showers';if(c<=99)return'Thunderstorm';return'Mixed'; }
 function uvDesc(u){ if(u<=2)return'Low';if(u<=5)return'Moderate';if(u<=7)return'High';if(u<=10)return'Very High';return'Extreme'; }
 function aqiDesc(a){ if(a<=20)return'Good';if(a<=40)return'Fair';if(a<=60)return'Moderate';if(a<=80)return'Poor';if(a<=100)return'Very Poor';return'Extremely Poor'; }
+function soilDesc(m){ if(m<10)return'Very dry';if(m<25)return'Dry';if(m<45)return'Moist';if(m<70)return'Well watered';return'Saturated'; }
+function setHomeCards(show){ ['indoorCard','stationCard','soilCard'].forEach(id=>{const e=$(id); if(e)e.style.display=show?'flex':'none';}); const rb=$('rainBreakdown'); if(rb)rb.style.display=show?'grid':'none'; }
 
 function $(id){ return document.getElementById(id); }
 function setT(id,v){ const e=$(id); if(e)e.textContent=v; }
@@ -597,8 +616,7 @@ function pickLoc(key){
   const loc=locByKey(key);
   setT('topLoc',loc.top); setT('topSub',loc.sub);
   setT('heroTag',key==='home'?'HOME':loc.name.toUpperCase());
-  $('indoorCard').style.display = key==='home'?'flex':'none';
-  $('stationCard').style.display = key==='home'?'flex':'none';
+  setHomeCards(key==='home');
   renderDrawer();
   updateMap(loc.lat,loc.lon);
   fetchAll();
@@ -651,8 +669,7 @@ function applyCurrentView(){
   const loc=currentGeoLoc, home=loc.atHome;
   setT('topLoc', home?'Home — Burton-on-the-Wolds':loc.top); setT('topSub',loc.sub);
   setT('heroTag', home?'HOME':(loc.name||'Current').toUpperCase());
-  $('indoorCard').style.display=home?'flex':'none';
-  $('stationCard').style.display=home?'flex':'none';
+  setHomeCards(home);
   renderDrawer();
   updateMap(loc.lat,loc.lon);
   fetchAll();
@@ -752,25 +769,53 @@ async function fetchStation(){
     setT('presVal',pres.toFixed(0));
     $('gaugeArc').style.strokeDashoffset=(157*(1-pPct)).toFixed(0);
     $('gaugeNeedle').setAttribute('transform',`rotate(${-90+pPct*180},65,80)`);
-    setT('presTrend',pres>1013?'High':pres<1000?'Low':'Normal');
+    setT('presAbs','Abs '+parseFloat(d.pressure?.absolute?.value??pres).toFixed(0)+' hPa'); // trend set by fetchPressureTrend
 
     // UV
     setT('uvVal',uv.toFixed(1)); setT('uvDesc',uvDesc(uv));
     $('uvDot').style.left=Math.min(100,(uv/11)*100)+'%';
 
-    // precip
+    // precip + breakdown
     setT('precipVal',rdaily.toFixed(1)+' mm'); setT('precipSub','Today'); setT('precipDesc',rrate>0?rrate.toFixed(1)+' mm/h falling now.':'None right now.');
+    const rp=d.rainfall_piezo||d.rainfall||{}; const rget=k=>parseFloat(rp[k]?.value??0);
+    const rbEl=$('rainBreakdown');
+    if(rbEl){ rbEl.innerHTML=[['Rate',rrate.toFixed(1)+' mm/h'],['This hr',rget('1_hour').toFixed(1)+' mm'],['Event',rget('event').toFixed(1)+' mm'],['Week',rget('weekly').toFixed(1)+' mm'],['Month',rget('monthly').toFixed(1)+' mm'],['Year',rget('yearly').toFixed(1)+' mm']].map(([k,v])=>`<div class="rain-cell"><div class="rain-k">${k}</div><div class="rain-v">${v}</div></div>`).join(''); }
 
-    // indoor / station
+    // indoor / soil / station health
     setT('inTemp',inT.toFixed(1)+'°'); setT('inHum',inH+'%');
+    const inDew=parseFloat(d.indoor?.dew_point?.value??NaN); if(!isNaN(inDew)) setT('inDew',inDew.toFixed(0)+'°');
+    const vpd=parseFloat(d.outdoor?.vpd?.value??NaN); if(!isNaN(vpd)) setT('vpdVal',(vpd*3.386389).toFixed(2)+' kPa');
+    const soil=parseFloat(d.soil_ch1?.soilmoisture?.value??NaN);
+    if(!isNaN(soil)){ setT('soilVal',soil.toFixed(0)+'%'); setT('soilDesc',soilDesc(soil)); $('soilDot').style.left=Math.min(100,soil)+'%'; }
     const batt=d.battery?.haptic_array_battery?.value??d.battery?.ws1900_batt?.value;
+    const cap=d.battery?.haptic_array_capacitor?.value, sbatt=d.battery?.soilmoisture_sensor_ch1?.value;
     setT('battVal',batt?batt+'V':'OK'); setT('solarVal',solar.toFixed(0)+' W/m²');
+    setT('capVal',cap?cap+'V':'—'); setT('soilBatt',sbatt?sbatt+'V':'—');
 
     // sidebar
     const dh=$('dt_home'); if(dh){ dh.textContent=temp.toFixed(0)+'°'; dh.style.color=tColor(temp); }
     const dc=$('dt_current'); if(dc&&isHomeView()){ dc.textContent=temp.toFixed(0)+'°'; dc.style.color=tColor(temp); }
     setT('liveTime',new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
   }catch(e){ $('err').textContent='Station: '+e.message; $('err').classList.add('show'); }
+}
+
+// ── Pressure trend (Ecowitt history, last ~3h) ──
+async function fetchPressureTrend(){
+  try{
+    const pad=n=>String(n).padStart(2,'0');
+    const fmt=dt=>`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}%20${pad(dt.getHours())}:${pad(dt.getMinutes())}:00`;
+    const now=new Date(), start=new Date(now.getTime()-6*3600000);
+    const url=`https://api.ecowitt.net/api/v3/device/history?application_key=${APP_KEY}&api_key=${ECOWITT_KEY}&mac=${MAC}&start_date=${fmt(start)}&end_date=${fmt(now)}&cycle_type=30min&call_back=pressure&pressure_unitid=3`;
+    const j=await(await fetch(url)).json();
+    const list=j?.data?.pressure?.relative?.list; if(!list) return;
+    const pts=Object.entries(list).map(([t,v])=>[+t,parseFloat(v)]).filter(p=>!isNaN(p[1])).sort((a,b)=>a[0]-b[0]);
+    if(pts.length<2) return;
+    const last=pts[pts.length-1], target=last[0]-3*3600;
+    let ref=pts[0]; for(const p of pts){ if(Math.abs(p[0]-target)<Math.abs(ref[0]-target)) ref=p; }
+    const delta=last[1]-ref[1], hrs=Math.max(1,Math.round((last[0]-ref[0])/3600));
+    const arrow=delta>0.4?'↑':delta<-0.4?'↓':'→', word=delta>0.4?'Rising':delta<-0.4?'Falling':'Steady';
+    setT('presTrend',`${arrow} ${word} ${delta>=0?'+':''}${delta.toFixed(1)}/${hrs}h`);
+  }catch(e){}
 }
 
 // ── Open-Meteo forecast (hourly+daily+sun) ──
@@ -835,10 +880,11 @@ async function fetchForecast(lat,lon,isHome){
     const visM=d.hourly.visibility?.[0];
     if(visM!==undefined){ const visMi=(visM/1609).toFixed(0); setT('visVal',visMi+' mi'); setT('visDesc',visMi>=10?'Perfectly clear view.':visMi>=5?'Good visibility.':'Reduced visibility.'); }
 
-    // if not home, fill hero + feels + humidity + precip from forecast
-    if(!isHome){
-      const cur=d.hourly.temperature_2m[findNowIdx(d.hourly.time)];
-      // handled in fetchRemote
+    // if not home, fill today's precipitation from the forecast (station handles home)
+    if(!isHome && d.daily?.precipitation_sum){
+      setT('precipVal',(d.daily.precipitation_sum[0]??0).toFixed(1)+' mm'); setT('precipSub','Today');
+      const pp=d.daily.precipitation_probability_max[0]||0;
+      setT('precipDesc',pp>0?pp+'% chance today.':'None expected today.');
     }
     // hi/lo for hero on home comes from station's running; but daily today is more useful — set if home too
     if(isHome){ setT('heroHi',d.daily.temperature_2m_max[0].toFixed(0)); setT('heroLo',d.daily.temperature_2m_min[0].toFixed(0)); }
@@ -901,7 +947,7 @@ async function fetchRemote(loc){
       const pres=c.surface_pressure; const pPct=Math.max(0,Math.min(1,(pres-980)/60));
       setT('presVal',pres.toFixed(0)); $('gaugeArc').style.strokeDashoffset=(157*(1-pPct)).toFixed(0);
       $('gaugeNeedle').setAttribute('transform',`rotate(${-90+pPct*180},65,80)`);
-      setT('presTrend',pres>1013?'High':pres<1000?'Low':'Normal');
+      setT('presTrend',pres>1013?'High':pres<1000?'Low':'Normal'); setT('presAbs','');
       const uv=c.uv_index;
       if(uv!=null){ setT('uvVal',uv.toFixed(1)); setT('uvDesc',uvDesc(uv)); $('uvDot').style.left=Math.min(100,(uv/11)*100)+'%'; }
       else { setT('uvVal','—'); setT('uvDesc','—'); $('uvDot').style.left='0%'; }
@@ -928,14 +974,14 @@ async function fetchAll(){
   if(!loc){ btn.classList.remove('spin'); return; } // 'current' not resolved yet
   const isHome=isHomeView();
   const tasks=[fetchForecast(loc.lat,loc.lon,isHome), fetchAQI(loc.lat,loc.lon), fetchSidebar()];
-  if(isHome) tasks.push(fetchStation()); else tasks.push(fetchRemote(loc));
+  if(isHome) tasks.push(fetchStation(), fetchPressureTrend()); else tasks.push(fetchRemote(loc));
   updateMoon();
   await Promise.all(tasks);
   btn.classList.remove('spin');
 }
 
 // ── App version / updates ──
-const APP_BUILD='v8 · 2026-06-07';
+const APP_BUILD='v9 · 2026-06-07';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
@@ -959,7 +1005,7 @@ if('serviceWorker' in navigator){
 setBuildTag();
 renderDrawer();
 updateMap(HOME_LAT,HOME_LON);
-$('indoorCard').style.display='flex'; $('stationCard').style.display='flex';
+setHomeCards(true);
 fetchAll();
 setInterval(fetchAll,60000);
 </script>
