@@ -265,6 +265,7 @@ body {
   <symbol id="ic-aqi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h12a3 3 0 1 0-3-3"/><path d="M3 12h16a3 3 0 1 1-3 3"/><path d="M3 16h10a2.5 2.5 0 1 1-2.5 2.5"/></symbol>
   <symbol id="ic-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></symbol>
   <symbol id="ic-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="ic-locate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></symbol>
   <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
   <symbol id="ic-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
   <symbol id="ic-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
@@ -510,6 +511,9 @@ const MAC='8C:4F:00:4F:E6:77';
 const HOME_LAT=52.7868543, HOME_LON=-1.1251226;
 
 const HOME_LOC={key:'home',lat:HOME_LAT,lon:HOME_LON,name:'Home',sub:'Burton-on-the-Wolds · Live station',top:'Home — Burton-on-the-Wolds',fixed:true};
+const HOME_RADIUS_KM=4; // inside this radius of home → use the live station, not the forecast API
+let currentGeoLoc=null;  // resolved geolocation result, behaves as the 'current' location
+function haversineKm(la1,lo1,la2,lo2){ const R=6371,r=Math.PI/180; const dLa=(la2-la1)*r,dLo=(lo2-lo1)*r; const a=Math.sin(dLa/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(a)); }
 function loadLocs(){ try{return JSON.parse(localStorage.getItem('wxLocs')||'[]')}catch(e){return[]} }
 function saveLocs(l){ localStorage.setItem('wxLocs',JSON.stringify(l.filter(x=>!x.fixed))) }
 let userLocs=loadLocs();
@@ -519,8 +523,9 @@ if(!userLocs.length){ userLocs=[
   {key:'vilamoura',lat:37.0735,lon:-8.1219,name:'Vilamoura',sub:'Algarve, Portugal',top:'Vilamoura'},
 ]; saveLocs(userLocs); }
 function allLocs(){ return [HOME_LOC,...userLocs]; }
-function locByKey(k){ return allLocs().find(l=>l.key===k); }
+function locByKey(k){ if(k==='current') return currentGeoLoc; return allLocs().find(l=>l.key===k); }
 let currentLoc='home';
+function isHomeView(){ return currentLoc==='home' || (currentLoc==='current' && currentGeoLoc && currentGeoLoc.atHome); }
 let mapLayer='wind';
 let tHigh=null,tLow=null;
 
@@ -557,7 +562,13 @@ function openDrawer(){ $('drawer').classList.add('open'); $('drawerOverlay').cla
 function closeDrawer(){ $('drawer').classList.remove('open'); $('drawerOverlay').classList.remove('open'); }
 
 function renderDrawer(){
-  let h=`<div class="drawer-sect">My Station</div>
+  let h=`<div class="drawer-sect">Current</div>
+  <div class="dloc ${currentLoc==='current'?'active':''}" onclick="pickCurrent()">
+    <svg class="dloc-icon" stroke="currentColor"><use href="#ic-locate"/></svg>
+    <div class="dloc-info"><div class="dloc-name">Current Location</div><div class="dloc-sub">${currentGeoLoc?currentGeoLoc.sub:'Tap to detect'}</div></div>
+    <div class="dloc-temp" id="dt_current">${currentGeoLoc?'--°':'›'}</div>
+  </div>
+  <div class="drawer-sect">My Station</div>
   <div class="dloc ${currentLoc==='home'?'active':''}" onclick="pickLoc('home')">
     <svg class="dloc-icon" stroke="currentColor"><use href="#ic-home"/></svg>
     <div class="dloc-info"><div class="dloc-name">Home</div><div class="dloc-sub">Burton-on-the-Wolds</div></div>
@@ -596,6 +607,52 @@ function removeLoc(e,key){
   else { renderDrawer(); fetchSidebar(); }
 }
 
+// ── Current location (device geolocation) ──
+function showErr(m){ const e=$('err'); if(e){ e.textContent=m; e.classList.add('show'); } }
+function pickCurrent(){
+  closeDrawer();
+  if(!navigator.geolocation){ currentLoc='current'; setT('topLoc','Current Location'); setT('topSub','Geolocation not supported'); showErr('Geolocation is not supported on this device.'); return; }
+  currentLoc='current';
+  setT('topLoc','Locating…'); setT('topSub','Getting your position…'); setT('heroTag','CURRENT');
+  renderDrawer();
+  navigator.geolocation.getCurrentPosition(onGeo, onGeoErr, {enableHighAccuracy:true, timeout:12000, maximumAge:120000});
+}
+async function onGeo(pos){
+  if(currentLoc!=='current') return; // user switched away while we waited
+  const lat=pos.coords.latitude, lon=pos.coords.longitude;
+  if(haversineKm(lat,lon,HOME_LAT,HOME_LON)<=HOME_RADIUS_KM){
+    // near home → use the live station instead of the forecast API
+    currentGeoLoc={key:'current',lat:HOME_LAT,lon:HOME_LON,name:'Home',sub:'At home · Live station',top:'Home — Burton-on-the-Wolds',atHome:true};
+  } else {
+    let name='Current Location', sub='Your location';
+    try{
+      const g=await(await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`)).json();
+      name=g.city||g.locality||g.principalSubdivision||'Current Location';
+      sub=[g.principalSubdivision,g.countryName].filter(Boolean).join(', ')||'Your location';
+    }catch(e){}
+    currentGeoLoc={key:'current',lat,lon,name,sub,top:name,atHome:false};
+  }
+  applyCurrentView();
+}
+function onGeoErr(err){
+  if(currentLoc!=='current') return;
+  currentGeoLoc=null;
+  const msg = err.code===1?'Location permission denied.':err.code===3?'Location request timed out.':'Could not get your location.';
+  setT('topLoc','Current Location'); setT('topSub',msg);
+  showErr(msg+' Showing Home instead.');
+  setTimeout(()=>pickLoc('home'),1400);
+}
+function applyCurrentView(){
+  const loc=currentGeoLoc, home=loc.atHome;
+  setT('topLoc', home?'Home — Burton-on-the-Wolds':loc.top); setT('topSub',loc.sub);
+  setT('heroTag', home?'HOME':(loc.name||'Current').toUpperCase());
+  $('indoorCard').style.display=home?'flex':'none';
+  $('stationCard').style.display=home?'flex':'none';
+  renderDrawer();
+  updateMap(loc.lat,loc.lon);
+  fetchAll();
+}
+
 // ── Modal ──
 function openModal(){ $('searchInput').value=''; $('searchResults').innerHTML='<div class="modal-note">Type a city name to search</div>'; $('modalOverlay').classList.add('open'); setTimeout(()=>$('searchInput').focus(),100); }
 function closeModal(){ $('modalOverlay').classList.remove('open'); }
@@ -632,7 +689,7 @@ function setMapLayer(layer,btn){
   document.querySelectorAll('.map-toggle').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   const loc=locByKey(currentLoc);
-  updateMap(loc.lat,loc.lon);
+  if(loc) updateMap(loc.lat,loc.lon);
 }
 
 // ── Ecowitt station ──
@@ -706,6 +763,7 @@ async function fetchStation(){
 
     // sidebar
     const dh=$('dt_home'); if(dh){ dh.textContent=temp.toFixed(0)+'°'; dh.style.color=tColor(temp); }
+    const dc=$('dt_current'); if(dc&&isHomeView()){ dc.textContent=temp.toFixed(0)+'°'; dc.style.color=tColor(temp); }
     setT('liveTime',new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
   }catch(e){ $('err').textContent='Station: '+e.message; $('err').classList.add('show'); }
 }
@@ -838,6 +896,7 @@ async function fetchRemote(loc){
       $('gaugeNeedle').setAttribute('transform',`rotate(${-90+pPct*180},65,80)`);
       setT('presTrend',pres>1013?'High':pres<1000?'Low':'Normal');
       setT('uvVal','—'); setT('uvDesc','—'); $('uvDot').style.left='0%';
+      if(currentLoc==='current'){ const dc=$('dt_current'); if(dc){ dc.textContent=c.temperature_2m.toFixed(0)+'°'; dc.style.color=tColor(c.temperature_2m); } }
     }
     setT('liveTime',new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
   }catch(e){}
@@ -857,7 +916,8 @@ async function fetchSidebar(){
 async function fetchAll(){
   const btn=$('refreshBtn'); btn.classList.add('spin');
   const loc=locByKey(currentLoc);
-  const isHome=currentLoc==='home';
+  if(!loc){ btn.classList.remove('spin'); return; } // 'current' not resolved yet
+  const isHome=isHomeView();
   const tasks=[fetchForecast(loc.lat,loc.lon,isHome), fetchAQI(loc.lat,loc.lon), fetchSidebar()];
   if(isHome) tasks.push(fetchStation()); else tasks.push(fetchRemote(loc));
   updateMoon();
