@@ -1,0 +1,11 @@
+# Local secrets — NEVER commit (this is a public repo)
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+
+# Temp / scratch
+.gitmsg.tmp
+*.tmp
