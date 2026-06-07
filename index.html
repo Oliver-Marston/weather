@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Weather">
+<meta name="apple-mobile-web-app-title" content="Weathered">
 <meta name="theme-color" content="#2d6ea0">
-<title>My Weather Station</title>
+<title>Weathered World</title>
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -330,7 +330,7 @@ body {
 <div class="auth-gate" id="authGate">
   <div class="auth-card">
     <img class="auth-logo" src="icon-180.png" alt="">
-    <div class="auth-title">My Weather Station</div>
+    <div class="auth-title">Weathered World</div>
     <div class="auth-sub">Sign in to continue</div>
     <input class="auth-input" id="authEmail" type="email" placeholder="Email" autocomplete="username" autocapitalize="off" spellcheck="false">
     <input class="auth-input" id="authPw" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authSubmit()">
@@ -344,7 +344,7 @@ body {
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
 <nav class="drawer" id="drawer">
   <div class="drawer-head">
-    <div class="drawer-title">My Weather</div>
+    <div class="drawer-title">Weathered World</div>
     <div class="drawer-search" onclick="openModal()">
       <svg style="width:14px;height:14px" stroke="currentColor"><use href="#ic-search"/></svg>
       <span>Search a location</span>
@@ -1287,7 +1287,7 @@ async function fetchAll(){
 }
 
 // ── App version / updates ──
-const APP_BUILD='v15 · 2026-06-07';
+const APP_BUILD='v16 · 2026-06-07';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.

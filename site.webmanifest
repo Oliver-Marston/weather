@@ -1,7 +1,7 @@
 {
-  "name": "My Weather Station",
-  "short_name": "Weather",
-  "description": "Self-contained weather station web app",
+  "name": "Weathered World",
+  "short_name": "Weathered",
+  "description": "Live weather dashboard for your Ecowitt station, with a year of history and trends",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#16456f",
