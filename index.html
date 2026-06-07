@@ -600,6 +600,14 @@ if(!userLocs.length){ userLocs=[
   {key:'vilamoura',lat:37.0735,lon:-8.1219,name:'Vilamoura',sub:'Algarve, Portugal',top:'Vilamoura'},
 ]; saveLocs(userLocs); }
 function allLocs(){ return [HOME_LOC,...userLocs]; }
+// Push saved favourites into the DB so the 30-min logger (and history) tracks them too.
+async function syncLocations(){
+  if(!SUPABASE_URL||!SUPABASE_ANON||!userLocs.length) return;
+  try{
+    const rows=userLocs.map(l=>({key:l.key,name:l.name,sub:l.sub||null,lat:l.lat,lon:l.lon,is_home:false}));
+    await fetch(`${SUPABASE_URL}/rest/v1/locations?on_conflict=key`,{method:'POST',headers:{apikey:SUPABASE_ANON,Authorization:`Bearer ${SUPABASE_ANON}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+  }catch(e){}
+}
 function locByKey(k){ if(k==='current') return currentGeoLoc; return allLocs().find(l=>l.key===k); }
 let currentLoc='home';
 function isHomeView(){ return currentLoc==='home' || (currentLoc==='current' && currentGeoLoc && currentGeoLoc.atHome); }
@@ -757,7 +765,7 @@ async function doSearch(){
 function addLoc(lat,lon,name,sub,key){
   if(allLocs().some(l=>l.key===key))return;
   userLocs.push({key,lat,lon,name,sub,top:name});
-  saveLocs(userLocs); renderDrawer(); fetchSidebar(); closeModal();
+  saveLocs(userLocs); syncLocations(); renderDrawer(); fetchSidebar(); closeModal();
   setTimeout(()=>pickLoc(key),100);
 }
 
@@ -1191,7 +1199,7 @@ async function fetchAll(){
 }
 
 // ── App version / updates ──
-const APP_BUILD='v12 · 2026-06-07';
+const APP_BUILD='v13 · 2026-06-07';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
@@ -1214,6 +1222,7 @@ if('serviceWorker' in navigator){
 
 // ── Init ──
 setBuildTag();
+syncLocations();
 renderDrawer();
 updateMap(HOME_LAT,HOME_LON);
 setHomeCards(true);
