@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#2d6ea0">
+<title>My Weather Station</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-top: #5a9ecf;
+  --bg-mid: #2d6ea0;
+  --bg-bot: #16456f;
+  --card: rgba(255,255,255,0.15);
+  --card-hi: rgba(255,255,255,0.22);
+  --border: rgba(255,255,255,0.25);
+  --text: #ffffff;
+  --t60: rgba(255,255,255,0.6);
+  --t45: rgba(255,255,255,0.45);
+  --warm: #ff8a3d;
+  --cool: #2ce0d0;
+  --rain: #aaddff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; font-family: 'Inter', sans-serif; color: var(--text); }
+body {
+  min-height: 100vh; min-height: 100dvh;
+  background: linear-gradient(165deg, var(--bg-top) 0%, var(--bg-mid) 45%, var(--bg-bot) 100%);
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+/* ── Drawer nav ── */
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(3px);
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.drawer-overlay.open { opacity: 1; pointer-events: auto; }
+.drawer {
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 91;
+  width: 280px; max-width: 82vw;
+  background: linear-gradient(170deg, #357ab0 0%, #1a4d7a 100%);
+  border-right: 1px solid var(--border);
+  transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  display: flex; flex-direction: column;
+  box-shadow: 4px 0 30px rgba(0,0,0,0.3);
+}
+.drawer.open { transform: translateX(0); }
+.drawer-head { padding: 18px 16px 12px; border-bottom: 1px solid var(--border); }
+.drawer-title { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t60); margin-bottom: 10px; }
+.drawer-search { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.12); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; cursor: pointer; }
+.drawer-search span { font-size: 13px; color: var(--t60); }
+.drawer-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+.drawer-sect { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t45); padding: 10px 16px 4px; }
+.dloc {
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+  cursor: pointer; border-left: 3px solid transparent; transition: background 0.15s;
+}
+.dloc:hover { background: rgba(255,255,255,0.1); }
+.dloc.active { background: rgba(255,255,255,0.16); border-left-color: #fff; }
+.dloc-icon { width: 26px; height: 26px; flex-shrink: 0; opacity: 0.9; }
+.dloc-info { flex: 1; min-width: 0; }
+.dloc-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dloc-sub { font-size: 11px; color: var(--t60); margin-top: 1px; }
+.dloc-temp { font-size: 24px; font-weight: 300; flex-shrink: 0; }
+.dloc-remove { background: none; border: none; color: var(--t45); font-size: 18px; cursor: pointer; padding: 2px 6px; display: none; flex-shrink: 0; }
+.dloc:hover .dloc-remove { display: block; }
+.dloc-remove:hover { color: #ff6b6b; }
+.drawer-foot { padding: 12px 16px; border-top: 1px solid var(--border); }
+.drawer-add { width: 100%; background: transparent; border: 1px dashed var(--t45); border-radius: 10px; padding: 11px; color: var(--t60); font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; font-family: inherit; transition: all 0.2s; }
+.drawer-add:hover { border-color: #fff; color: #fff; }
+
+/* ── Top bar ── */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px;
+  background: rgba(45,110,160,0.5); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.menu-btn { background: rgba(255,255,255,0.15); border: 1px solid var(--border); border-radius: 9px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
+.menu-btn:hover { background: rgba(255,255,255,0.25); }
+.menu-btn svg { width: 20px; height: 20px; }
+.topbar-mid { flex: 1; min-width: 0; }
+.topbar-loc { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-sub { font-size: 11px; color: var(--t60); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-pill { display: flex; align-items: center; gap: 5px; background: rgba(44,224,208,0.14); border: 1px solid rgba(44,224,208,0.35); border-radius: 20px; padding: 5px 11px; font-size: 11px; color: var(--cool); flex-shrink: 0; }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cool); animation: blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.refresh-btn { background: rgba(255,255,255,0.15); border: 1px solid var(--border); border-radius: 9px; width: 38px; height: 38px; color: #fff; font-size: 17px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.2s; }
+.refresh-btn:hover { background: rgba(255,255,255,0.25); }
+.refresh-btn.spin { animation: rot 1s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+
+/* ── Page container ── */
+.page { max-width: 1100px; margin: 0 auto; padding: 20px 18px 50px; }
+
+.err { background: rgba(255,80,80,0.16); border: 1px solid rgba(255,80,80,0.35); border-radius: 12px; padding: 11px 15px; font-size: 13px; color: #ffb0b0; margin-bottom: 16px; display: none; }
+.err.show { display: block; }
+
+/* ── Hero ── */
+.hero { text-align: center; padding: 14px 0 26px; }
+.hero-loc-tag { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t60); display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 6px; }
+.hero-loc-tag svg { width: 13px; height: 13px; }
+.hero-cond-icon { width: 64px; height: 64px; margin: 4px auto 2px; display: block; }
+.hero-temp { font-size: 104px; font-weight: 200; line-height: 0.95; letter-spacing: -5px; transition: color 0.6s; }
+.hero-temp sup { font-size: 40px; font-weight: 300; vertical-align: top; letter-spacing: 0; }
+.hero-cond { font-size: 19px; font-weight: 500; margin-top: 2px; }
+.hero-feels { font-size: 17px; color: var(--text); margin-top: 8px; font-weight: 500; }
+.hero-hilo { font-size: 16px; font-weight: 600; margin-top: 2px; }
+.hero-hilo .hi { color: var(--warm); }
+.hero-hilo .lo { color: var(--rain); }
+
+/* ── Card base ── */
+.card {
+  background: var(--card); backdrop-filter: blur(10px);
+  border: 1px solid var(--border); border-radius: 18px;
+  padding: 16px; margin-bottom: 14px;
+}
+.card-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t60); display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
+.card-title svg { width: 14px; height: 14px; }
+
+/* ── Hourly scroll ── */
+.hourly { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.hourly::-webkit-scrollbar { display: none; }
+.hcell { flex-shrink: 0; width: 60px; text-align: center; padding: 6px 2px; }
+.hcell-time { font-size: 12px; font-weight: 600; color: var(--t60); margin-bottom: 8px; }
+.hcell.now .hcell-time { color: #fff; font-weight: 700; }
+.hcell-icon { width: 26px; height: 26px; margin: 0 auto 8px; display: block; }
+.hcell-temp { font-size: 16px; font-weight: 700; transition: color 0.4s; }
+.hcell-rain { font-size: 10px; color: var(--rain); margin-top: 5px; min-height: 13px; font-weight: 500; }
+.hcell-sun { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+.hcell-sun-icon { width: 24px; height: 24px; margin: 1px auto 8px; }
+.hcell-sun-label { font-size: 9px; color: var(--t60); }
+
+/* ── Daily list ── */
+.drow { display: flex; align-items: center; gap: 12px; padding: 9px 2px; border-top: 1px solid rgba(255,255,255,0.1); }
+.drow:first-child { border-top: none; }
+.drow-day { width: 42px; font-size: 15px; font-weight: 600; }
+.drow-icon { width: 28px; height: 28px; flex-shrink: 0; }
+.drow-pop { width: 38px; font-size: 12px; color: var(--rain); font-weight: 600; text-align: left; }
+.drow-lo { width: 34px; text-align: right; font-size: 15px; color: var(--t60); font-weight: 500; }
+.drow-bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.15); position: relative; overflow: hidden; }
+.drow-bar-fill { position: absolute; top: 0; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--cool), #7de87d, #ffd84d, var(--warm)); }
+.drow-hi { width: 34px; text-align: left; font-size: 15px; font-weight: 700; }
+
+/* ── Grid of stat cards ── */
+.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.grid .card { margin-bottom: 0; }
+.stat-big { font-size: 34px; font-weight: 600; line-height: 1; margin-bottom: 2px; }
+.stat-sub { font-size: 13px; color: var(--t60); margin-top: auto; }
+.stat-desc { font-size: 12px; color: var(--t60); margin-top: 8px; line-height: 1.4; }
+.card-fill { display: flex; flex-direction: column; min-height: 130px; }
+
+/* UV scale bar */
+.scale-bar { height: 6px; border-radius: 3px; margin: 10px 0 6px; background: linear-gradient(90deg,#4ade80,#a3e635,#facc15,#fb923c,#f87171,#c084fc); position: relative; }
+.scale-dot { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid var(--bg-mid); transform: translate(-50%,-50%); transition: left 0.5s; }
+
+/* Sun arc */
+.sun-arc-wrap { position: relative; height: 70px; margin: 6px 0; }
+.sun-arc-wrap svg { width: 100%; height: 100%; overflow: visible; }
+.sun-times { display: flex; justify-content: space-between; font-size: 11px; color: var(--t60); margin-top: 2px; }
+
+/* Pressure gauge */
+.gauge-wrap { display: flex; align-items: center; justify-content: center; padding: 4px 0; }
+.gauge-wrap svg { width: 130px; height: 90px; overflow: visible; }
+
+/* Wind dual compass */
+.wind-card-body { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.compass-pair { display: flex; gap: 16px; }
+.compass-unit { text-align: center; }
+.compass-unit-label { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t45); margin-bottom: 5px; }
+.compass-svg { width: 84px; height: 84px; }
+.compass-dir { font-size: 12px; font-weight: 700; margin-top: 5px; }
+.compass-deg { font-size: 10px; color: var(--t60); }
+.wind-readout { flex: 1; min-width: 130px; }
+.wind-big { font-size: 36px; font-weight: 200; line-height: 1; }
+.wind-big-unit { font-size: 14px; color: var(--t60); }
+.wind-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-top: 12px; }
+.wind-stat-lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t45); }
+.wind-stat-val { font-size: 14px; font-weight: 600; }
+
+/* Moon */
+.moon-body { display: flex; align-items: center; gap: 16px; }
+.moon-visual { width: 64px; height: 64px; flex-shrink: 0; }
+.moon-info { flex: 1; }
+.moon-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+.moon-row span:first-child { color: var(--t60); }
+
+/* Map */
+.map-card { padding: 0; overflow: hidden; }
+.map-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; flex-wrap: wrap; gap: 10px; }
+.map-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+.map-toggle { background: rgba(255,255,255,0.12); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--t60); cursor: pointer; font-family: inherit; transition: all 0.2s; }
+.map-toggle.active { background: rgba(255,255,255,0.28); color: #fff; }
+.map-frame { width: 100%; height: 420px; border: none; display: block; background: rgba(0,0,0,0.1); }
+
+/* Modal */
+.modal-overlay { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px; }
+.modal-overlay.open { display: flex; }
+.modal { background: linear-gradient(165deg,#3a7ab8,#1e5888); border: 1px solid var(--border); border-radius: 18px; padding: 24px; width: 380px; max-width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.4); }
+.modal-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+.modal-close { background: rgba(255,255,255,0.12); border: none; border-radius: 50%; width: 30px; height: 30px; color: #fff; font-size: 17px; cursor: pointer; }
+.modal-search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.modal-input { flex: 1; background: rgba(255,255,255,0.15); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; font-size: 14px; color: #fff; font-family: inherit; outline: none; }
+.modal-input::placeholder { color: var(--t45); }
+.modal-input:focus { border-color: rgba(255,255,255,0.7); }
+.modal-go { background: rgba(255,255,255,0.2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 16px; color: #fff; font-weight: 600; font-size: 13px; cursor: pointer; font-family: inherit; }
+.modal-results { max-height: 260px; overflow-y: auto; }
+.mres { display: flex; align-items: center; justify-content: space-between; padding: 11px 12px; border-radius: 10px; cursor: pointer; gap: 10px; }
+.mres:hover { background: rgba(255,255,255,0.12); }
+.mres-name { font-size: 14px; font-weight: 600; }
+.mres-sub { font-size: 11px; color: var(--t60); margin-top: 1px; }
+.mres-add { background: rgba(255,255,255,0.15); border: 1px solid var(--border); border-radius: 8px; padding: 6px 13px; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+.modal-note { font-size: 13px; color: var(--t45); text-align: center; padding: 20px 0; }
+
+.placeholder { font-size: 12px; color: var(--t60); text-align: center; padding: 16px; }
+
+/* ════ RESPONSIVE ════ */
+/* iPad / desktop: wider grid */
+@media (min-width: 700px) {
+  .grid { grid-template-columns: repeat(3, 1fr); }
+  .hero-temp { font-size: 120px; }
+  .wind-grid-span { grid-column: span 2; }
+}
+@media (min-width: 1000px) {
+  .grid { grid-template-columns: repeat(4, 1fr); }
+}
+/* iPhone: tighten */
+@media (max-width: 480px) {
+  .hero-temp { font-size: 88px; }
+  .page { padding: 16px 14px 40px; }
+  .topbar-sub { display: none; }
+  .live-pill span { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- SVG icon defs -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg"><defs>
+  <symbol id="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="6.76" y2="6.76"/><line x1="17.24" y1="17.24" x2="19.07" y2="19.07"/><line x1="4.93" y1="19.07" x2="6.76" y2="17.24"/><line x1="17.24" y1="6.76" x2="19.07" y2="4.93"/></symbol>
+  <symbol id="ic-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></symbol>
+  <symbol id="ic-partly" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><line x1="8" y1="2.5" x2="8" y2="4"/><line x1="2.5" y1="8" x2="4" y2="8"/><line x1="12" y1="4" x2="13" y2="3"/><path d="M17.5 13h-.8A5 5 0 1 0 7 18h10.5a3 3 0 0 0 0-5z"/></symbol>
+  <symbol id="ic-rain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 9.5A5 5 0 0 0 11 7a5 5 0 0 0-9 3 4 4 0 0 0 4 4h14a4 4 0 0 0 0-4.5z" opacity=".7"/><line x1="8" y1="18" x2="8" y2="21"/><line x1="12" y1="17" x2="12" y2="20"/><line x1="16" y1="18" x2="16" y2="21"/></symbol>
+  <symbol id="ic-snow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 9.5A5 5 0 0 0 11 7a5 5 0 0 0-9 3 4 4 0 0 0 4 4h14a4 4 0 0 0 0-4.5z" opacity=".7"/><circle cx="8" cy="19" r="1" fill="currentColor"/><circle cx="12" cy="20.5" r="1" fill="currentColor"/><circle cx="16" cy="19" r="1" fill="currentColor"/></symbol>
+  <symbol id="ic-thunder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 9A7 7 0 1 0 7 9H5a4 4 0 0 0 0 8h14a4 4 0 0 0 0-8z" opacity=".7"/><polyline points="13,11 11,15 13,15 11,19"/></symbol>
+  <symbol id="ic-fog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="3" y1="8" x2="21" y2="8"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="3" y1="16" x2="21" y2="16"/></symbol>
+  <symbol id="ic-moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></symbol>
+  <symbol id="ic-wind" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2"/><path d="M12.42 19.42A2 2 0 1 0 14 16H2"/><path d="M8 12h10a2 2 0 1 1-2 2"/></symbol>
+  <symbol id="ic-drop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></symbol>
+  <symbol id="ic-uv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21"/><line x1="3" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21" y2="12"/></symbol>
+  <symbol id="ic-sunset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8,6 12,9 16,6"/></symbol>
+  <symbol id="ic-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 14 L16 8"/><circle cx="12" cy="14" r="1.5" fill="currentColor" stroke="none"/><path d="M4 16a8 8 0 1 1 16 0"/></symbol>
+  <symbol id="ic-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="ic-aqi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h12a3 3 0 1 0-3-3"/><path d="M3 12h16a3 3 0 1 1-3 3"/><path d="M3 16h10a2.5 2.5 0 1 1-2.5 2.5"/></symbol>
+  <symbol id="ic-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></symbol>
+  <symbol id="ic-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+  <symbol id="ic-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="ic-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
+  <symbol id="ic-feels" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></symbol>
+  <symbol id="ic-indoor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" opacity=".5"/><path d="M13 13.5V10a1.5 1.5 0 0 0-3 0v3.5a2.5 2.5 0 1 0 3 0z"/></symbol>
+  <symbol id="ic-battery" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="13" x2="23" y2="11"/></symbol>
+  <symbol id="ic-solar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3"/><line x1="12" y1="2" x2="12" y2="3"/><line x1="18" y1="8" x2="19" y2="8"/><rect x="4" y="14" width="16" height="7" rx="1"/></symbol>
+</defs></svg>
+
+<!-- Drawer -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<nav class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="drawer-title">My Weather</div>
+    <div class="drawer-search" onclick="openModal()">
+      <svg style="width:14px;height:14px" stroke="currentColor"><use href="#ic-search"/></svg>
+      <span>Search a location</span>
+    </div>
+  </div>
+  <div class="drawer-list" id="drawerList"></div>
+  <div class="drawer-foot">
+    <button class="drawer-add" onclick="openModal()">
+      <svg style="width:14px;height:14px" stroke="currentColor"><use href="#ic-plus"/></svg>
+      Add location
+    </button>
+  </div>
+</nav>
+
+<!-- Topbar -->
+<div class="topbar">
+  <button class="menu-btn" onclick="openDrawer()"><svg stroke="currentColor"><use href="#ic-menu"/></svg></button>
+  <div class="topbar-mid">
+    <div class="topbar-loc" id="topLoc">Home</div>
+    <div class="topbar-sub" id="topSub">Loading…</div>
+  </div>
+  <div class="live-pill"><div class="live-dot"></div><span id="liveTime">—</span></div>
+  <button class="refresh-btn" id="refreshBtn" onclick="fetchAll()">↻</button>
+</div>
+
+<div class="page">
+  <div class="err" id="err"></div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-loc-tag"><svg stroke="currentColor"><use href="#ic-pin"/></svg><span id="heroTag">HOME</span></div>
+    <svg class="hero-cond-icon" id="heroIcon" stroke="currentColor"><use href="#ic-partly"/></svg>
+    <div class="hero-temp" id="heroTemp">--<sup>°</sup></div>
+    <div class="hero-cond" id="heroCond">—</div>
+    <div class="hero-feels">Feels Like <span id="heroFeels">--°</span></div>
+    <div class="hero-hilo"><span class="hi">H:<span id="heroHi">--</span>°</span> &nbsp; <span class="lo">L:<span id="heroLo">--</span>°</span></div>
+  </div>
+
+  <!-- Hourly -->
+  <div class="card">
+    <div class="card-title"><svg stroke="currentColor"><use href="#ic-partly"/></svg><span id="hourlyNote">24-Hour Forecast</span></div>
+    <div class="hourly" id="hourly"><div class="placeholder">Loading…</div></div>
+  </div>
+
+  <!-- Daily -->
+  <div class="card">
+    <div class="card-title"><svg stroke="currentColor"><use href="#ic-sun"/></svg>10-Day Forecast</div>
+    <div id="daily"><div class="placeholder">Loading…</div></div>
+  </div>
+
+  <!-- Wind (full width) -->
+  <div class="card">
+    <div class="card-title"><svg stroke="currentColor"><use href="#ic-wind"/></svg>Wind</div>
+    <div class="wind-card-body">
+      <div class="compass-pair">
+        <div class="compass-unit">
+          <div class="compass-unit-label">Current</div>
+          <svg class="compass-svg" viewBox="0 0 84 84" fill="none">
+            <circle cx="42" cy="42" r="39" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+            <text x="42" y="11" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="600" font-family="Inter">N</text>
+            <text x="42" y="79" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">S</text>
+            <text x="78" y="46" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">E</text>
+            <text x="6" y="46" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">W</text>
+            <g id="needle" transform="rotate(0,42,42)"><polygon points="42,14 45.5,42 42,49 38.5,42" fill="#fff"/><polygon points="42,49 45.5,42 42,70 38.5,42" fill="rgba(255,255,255,0.25)"/></g>
+            <circle cx="42" cy="42" r="4.5" fill="rgba(30,80,120,0.9)" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
+          </svg>
+          <div class="compass-dir" id="wDir">--</div>
+          <div class="compass-deg" id="wDeg">--°</div>
+        </div>
+        <div class="compass-unit">
+          <div class="compass-unit-label">10-Min Avg</div>
+          <svg class="compass-svg" viewBox="0 0 84 84" fill="none">
+            <circle cx="42" cy="42" r="39" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+            <text x="42" y="11" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="600" font-family="Inter">N</text>
+            <text x="42" y="79" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">S</text>
+            <text x="78" y="46" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">E</text>
+            <text x="6" y="46" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">W</text>
+            <g id="needle10" transform="rotate(0,42,42)"><polygon points="42,14 45.5,42 42,49 38.5,42" fill="#2ce0d0"/><polygon points="42,49 45.5,42 42,70 38.5,42" fill="rgba(44,224,208,0.2)"/></g>
+            <circle cx="42" cy="42" r="4.5" fill="rgba(30,80,120,0.9)" stroke="rgba(44,224,208,0.7)" stroke-width="1.5"/>
+          </svg>
+          <div class="compass-dir" style="color:#2ce0d0" id="wDir10">--</div>
+          <div class="compass-deg" id="wDeg10">--°</div>
+        </div>
+      </div>
+      <div class="wind-readout">
+        <div><span class="wind-big" id="wSpd">--</span> <span class="wind-big-unit">mph</span></div>
+        <div class="wind-stats">
+          <div><div class="wind-stat-lbl">Gusts</div><div class="wind-stat-val" style="color:var(--warm)" id="wGust">--</div></div>
+          <div><div class="wind-stat-lbl">km/h</div><div class="wind-stat-val" id="wKmh">--</div></div>
+          <div><div class="wind-stat-lbl">Beaufort</div><div class="wind-stat-val" id="wBft">--</div></div>
+          <div><div class="wind-stat-lbl">Gust km/h</div><div class="wind-stat-val" id="wGustKmh">--</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map (full width) -->
+  <div class="card map-card">
+    <div class="map-head">
+      <div class="card-title" style="margin-bottom:0"><svg stroke="currentColor"><use href="#ic-wind"/></svg>Map</div>
+      <div class="map-toggles" id="mapToggles">
+        <button class="map-toggle active" onclick="setMapLayer('wind',this)">Wind</button>
+        <button class="map-toggle" onclick="setMapLayer('temp',this)">Temp</button>
+        <button class="map-toggle" onclick="setMapLayer('rain',this)">Rain</button>
+        <button class="map-toggle" onclick="setMapLayer('clouds',this)">Cloud</button>
+        <button class="map-toggle" onclick="setMapLayer('pressure',this)">Pressure</button>
+      </div>
+    </div>
+    <iframe class="map-frame" id="mapFrame" src="" loading="lazy"></iframe>
+  </div>
+
+  <!-- Stat grid -->
+  <div class="grid">
+    <!-- UV -->
+    <div class="card card-fill">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-uv"/></svg>UV Index</div>
+      <div class="stat-big" id="uvVal">--</div>
+      <div id="uvDesc" style="font-size:14px;font-weight:600">—</div>
+      <div class="scale-bar"><div class="scale-dot" id="uvDot" style="left:0%"></div></div>
+    </div>
+    <!-- Sunrise/Sunset -->
+    <div class="card card-fill">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-sunset"/></svg>Sun</div>
+      <div class="sun-arc-wrap">
+        <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+          <path d="M10,70 Q100,-10 190,70" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2" stroke-dasharray="3 3"/>
+          <circle id="sunDot" cx="10" cy="70" r="5" fill="#ffd84d"/>
+          <line x1="10" y1="70" x2="190" y2="70" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+        </svg>
+      </div>
+      <div class="sun-times"><span>↑ <span id="sunrise">--</span></span><span>↓ <span id="sunset">--</span></span></div>
+    </div>
+    <!-- Feels like -->
+    <div class="card card-fill">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-feels"/></svg>Feels Like</div>
+      <div class="stat-big" id="flVal">--°</div>
+      <div class="stat-desc" id="flDesc">—</div>
+    </div>
+    <!-- Precipitation -->
+    <div class="card card-fill">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-drop"/></svg>Precipitation</div>
+      <div class="stat-big" id="precipVal">-- mm</div>
+      <div class="stat-sub" id="precipSub">Today</div>
+      <div class="stat-desc" id="precipDesc">—</div>
+    </div>
+    <!-- Humidity -->
+    <div class="card card-fill">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-drop"/></svg>Humidity</div>
+      <div class="stat-big" id="humVal">--%</div>
+      <div class="stat-desc" id="humDesc">—</div>
+    </div>
+    <!-- Pressure gauge -->
+    <div class="card card-fill">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-gauge"/></svg>Pressure</div>
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 130 90">
+          <path d="M15,80 A50,50 0 0,1 115,80" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="8" stroke-linecap="round"/>
+          <path id="gaugeArc" d="M15,80 A50,50 0 0,1 115,80" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="157"/>
+          <g id="gaugeNeedle" transform="rotate(0,65,80)"><line x1="65" y1="80" x2="65" y2="38" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></g>
+          <text x="65" y="68" text-anchor="middle" fill="#fff" font-size="17" font-weight="700" font-family="Inter" id="presVal">--</text>
+          <text x="65" y="80" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="8" font-family="Inter">hPa</text>
+        </svg>
+      </div>
+      <div class="sun-times"><span>Low</span><span id="presTrend">—</span><span>High</span></div>
+    </div>
+    <!-- Visibility -->
+    <div class="card card-fill">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-eye"/></svg>Visibility</div>
+      <div class="stat-big" id="visVal">--</div>
+      <div class="stat-desc" id="visDesc">—</div>
+    </div>
+    <!-- AQI -->
+    <div class="card card-fill">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-aqi"/></svg>Air Quality</div>
+      <div class="stat-big" id="aqiVal">--</div>
+      <div id="aqiDesc" style="font-size:14px;font-weight:600">—</div>
+      <div class="scale-bar" style="background:linear-gradient(90deg,#4ade80,#facc15,#fb923c,#f87171,#c084fc,#a855f7)"><div class="scale-dot" id="aqiDot" style="left:0%"></div></div>
+    </div>
+    <!-- Moon -->
+    <div class="card card-fill wind-grid-span">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-moon-icon"/></svg><span id="moonPhaseName">Moon</span></div>
+      <div class="moon-body">
+        <svg class="moon-visual" viewBox="0 0 64 64">
+          <defs><clipPath id="moonClip"><circle cx="32" cy="32" r="30"/></clipPath></defs>
+          <circle cx="32" cy="32" r="30" fill="rgba(255,255,255,0.15)"/>
+          <g clip-path="url(#moonClip)"><circle id="moonLit" cx="50" cy="32" r="30" fill="rgba(255,255,255,0.85)"/></g>
+          <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+        </svg>
+        <div class="moon-info">
+          <div class="moon-row"><span>Illumination</span><span id="moonIllum">--%</span></div>
+          <div class="moon-row"><span>Moonrise</span><span id="moonrise">--</span></div>
+          <div class="moon-row"><span>Moonset</span><span id="moonset">--</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- Indoor (home only) -->
+    <div class="card card-fill" id="indoorCard">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-indoor"/></svg>Indoor</div>
+      <div class="stat-big" id="inTemp">--°</div>
+      <div class="stat-desc">Humidity: <span id="inHum">--%</span></div>
+    </div>
+    <!-- Station (home only) -->
+    <div class="card card-fill" id="stationCard">
+      <div class="card-title"><svg stroke="currentColor"><use href="#ic-battery"/></svg>Station</div>
+      <div class="stat-big" style="font-size:24px" id="battVal">OK</div>
+      <div class="stat-desc">Solar: <span id="solarVal">-- W/m²</span></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Add Location Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="modalBg(event)">
+  <div class="modal">
+    <div class="modal-title">Add Location <button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="modal-search-row">
+      <input class="modal-input" id="searchInput" placeholder="Search city, town…" onkeydown="if(event.key==='Enter')doSearch()">
+      <button class="modal-go" onclick="doSearch()">Search</button>
+    </div>
+    <div class="modal-results" id="searchResults"><div class="modal-note">Type a city name to search</div></div>
+  </div>
+</div>
+
+<script>
+// ── Config ──
+const ECOWITT_KEY='19e71687-f879-409b-b97c-c6228954a8ba';
+const APP_KEY='E7DFEA21A613BF9B0C8F44E354C1C087';
+const MAC='8C:4F:00:4F:E6:77';
+const HOME_LAT=52.7868543, HOME_LON=-1.1251226;
+
+const HOME_LOC={key:'home',lat:HOME_LAT,lon:HOME_LON,name:'Home',sub:'Burton-on-the-Wolds · Live station',top:'Home — Burton-on-the-Wolds',fixed:true};
+function loadLocs(){ try{return JSON.parse(localStorage.getItem('wxLocs')||'[]')}catch(e){return[]} }
+function saveLocs(l){ localStorage.setItem('wxLocs',JSON.stringify(l.filter(x=>!x.fixed))) }
+let userLocs=loadLocs();
+if(!userLocs.length){ userLocs=[
+  {key:'loughborough',lat:52.7722,lon:-1.2037,name:'Loughborough',sub:'LE12, England',top:'Loughborough'},
+  {key:'london',lat:51.5074,lon:-0.1278,name:'London',sub:'England, UK',top:'London'},
+  {key:'vilamoura',lat:37.0735,lon:-8.1219,name:'Vilamoura',sub:'Algarve, Portugal',top:'Vilamoura'},
+]; saveLocs(userLocs); }
+function allLocs(){ return [HOME_LOC,...userLocs]; }
+function locByKey(k){ return allLocs().find(l=>l.key===k); }
+let currentLoc='home';
+let mapLayer='wind';
+let tHigh=null,tLow=null;
+
+// ── Helpers ──
+function deg2c(d){ return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(d/22.5)%16]; }
+function beaufort(k){ const m=k/3.6; if(m<0.3)return'0 Calm';if(m<1.6)return'1';if(m<3.4)return'2';if(m<5.5)return'3';if(m<8)return'4';if(m<10.8)return'5';if(m<13.9)return'6';if(m<17.2)return'7';if(m<20.8)return'8 Gale';return'9+'; }
+function kmh2mph(k){ return (k*0.621371); }
+function dp(t,h){ const a=17.27,b=237.7,al=((a*t)/(b+t))+Math.log(h/100); return (b*al)/(a-al); }
+function flCalc(t,h,w){ const e=(h/100)*6.105*Math.exp((17.27*t)/(237.7+t)); return t+0.33*e-0.70*(w/3.6)-4; }
+function humDesc(h){ if(h<30)return'Dry air';if(h<50)return'Comfortable';if(h<70)return'Moderate';if(h<85)return'Humid';return'Very humid'; }
+function tColor(t){ if(t<=0)return'#fff';if(t<=5)return'#bce4ff';if(t<=10)return'#82d4f4';if(t<=15)return'#4fdcc4';if(t<=18)return'#74ec7e';if(t<=22)return'#cdf244';if(t<=26)return'#ffc024';if(t<=30)return'#ff7a24';if(t<=35)return'#ff421a';return'#d40000'; }
+
+function svgCond(rain,uv,solar,wind,hr){
+  if(rain>0)return'ic-rain';
+  if(uv>=8||solar>700)return'ic-sun';
+  if(solar<50&&hr!==undefined&&(hr<6||hr>20))return'ic-moon-icon';
+  if(solar<50)return'ic-cloud';
+  if(solar<350)return'ic-partly';
+  if(wind>40)return'ic-wind';
+  return'ic-partly';
+}
+function condLabel(rain,uv,solar,wind){ if(rain>0)return'Rain';if(uv>=8)return'Bright sunshine';if(solar<50)return'Overcast';if(solar<300)return'Cloudy';if(wind>40)return'Windy';return'Partly cloudy'; }
+function wmoIcon(c){ if(c===0)return'ic-sun';if(c<=2)return'ic-partly';if(c<=3)return'ic-cloud';if(c<=49)return'ic-fog';if(c<=59)return'ic-rain';if(c<=69)return'ic-rain';if(c<=79)return'ic-snow';if(c<=82)return'ic-rain';if(c<=86)return'ic-snow';if(c<=99)return'ic-thunder';return'ic-cloud'; }
+function wmoLabel(c){ if(c===0)return'Clear sky';if(c<=2)return'Partly cloudy';if(c<=3)return'Overcast';if(c<=49)return'Fog';if(c<=59)return'Drizzle';if(c<=69)return'Rain';if(c<=79)return'Snow';if(c<=82)return'Rain showers';if(c<=86)return'Snow showers';if(c<=99)return'Thunderstorm';return'Mixed'; }
+function uvDesc(u){ if(u<=2)return'Low';if(u<=5)return'Moderate';if(u<=7)return'High';if(u<=10)return'Very High';return'Extreme'; }
+function aqiDesc(a){ if(a<=20)return'Good';if(a<=40)return'Fair';if(a<=60)return'Moderate';if(a<=80)return'Poor';if(a<=100)return'Very Poor';return'Extremely Poor'; }
+
+function $(id){ return document.getElementById(id); }
+function setT(id,v){ const e=$(id); if(e)e.textContent=v; }
+function setIcon(el,id){ if(!el)return; const u=el.querySelector('use'); if(u)u.setAttribute('href','#'+id); }
+
+// ── Drawer ──
+function openDrawer(){ $('drawer').classList.add('open'); $('drawerOverlay').classList.add('open'); }
+function closeDrawer(){ $('drawer').classList.remove('open'); $('drawerOverlay').classList.remove('open'); }
+
+function renderDrawer(){
+  let h=`<div class="drawer-sect">My Station</div>
+  <div class="dloc ${currentLoc==='home'?'active':''}" onclick="pickLoc('home')">
+    <svg class="dloc-icon" stroke="currentColor"><use href="#ic-home"/></svg>
+    <div class="dloc-info"><div class="dloc-name">Home</div><div class="dloc-sub">Burton-on-the-Wolds</div></div>
+    <div class="dloc-temp" id="dt_home">--°</div>
+  </div>
+  <div class="drawer-sect">Favourites</div>`;
+  userLocs.forEach(l=>{
+    h+=`<div class="dloc ${currentLoc===l.key?'active':''}" onclick="pickLoc('${l.key}')">
+      <svg class="dloc-icon" stroke="currentColor"><use href="#ic-pin"/></svg>
+      <div class="dloc-info"><div class="dloc-name">${l.name}</div><div class="dloc-sub">${l.sub}</div></div>
+      <div class="dloc-temp" id="dt_${l.key}">--°</div>
+      <button class="dloc-remove" onclick="removeLoc(event,'${l.key}')">✕</button>
+    </div>`;
+  });
+  $('drawerList').innerHTML=h;
+}
+
+function pickLoc(key){
+  currentLoc=key;
+  closeDrawer();
+  const loc=locByKey(key);
+  setT('topLoc',loc.top); setT('topSub',loc.sub);
+  setT('heroTag',key==='home'?'HOME':loc.name.toUpperCase());
+  $('indoorCard').style.display = key==='home'?'flex':'none';
+  $('stationCard').style.display = key==='home'?'flex':'none';
+  renderDrawer();
+  updateMap(loc.lat,loc.lon);
+  fetchAll();
+}
+
+function removeLoc(e,key){
+  e.stopPropagation();
+  userLocs=userLocs.filter(l=>l.key!==key);
+  saveLocs(userLocs);
+  if(currentLoc===key) pickLoc('home');
+  else { renderDrawer(); fetchSidebar(); }
+}
+
+// ── Modal ──
+function openModal(){ $('searchInput').value=''; $('searchResults').innerHTML='<div class="modal-note">Type a city name to search</div>'; $('modalOverlay').classList.add('open'); setTimeout(()=>$('searchInput').focus(),100); }
+function closeModal(){ $('modalOverlay').classList.remove('open'); }
+function modalBg(e){ if(e.target===$('modalOverlay')) closeModal(); }
+async function doSearch(){
+  const q=$('searchInput').value.trim(); if(!q)return;
+  const r=$('searchResults'); r.innerHTML='<div class="modal-note">Searching…</div>';
+  try{
+    const d=await(await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`)).json();
+    if(!d.results?.length){ r.innerHTML='<div class="modal-note">No results found</div>'; return; }
+    r.innerHTML=d.results.map(x=>{
+      const sub=[x.admin1,x.country].filter(Boolean).join(', ');
+      const key='loc_'+x.id;
+      const has=allLocs().some(l=>l.key===key);
+      return `<div class="mres"><div><div class="mres-name">${x.name}</div><div class="mres-sub">${sub}</div></div>${has?'<span style="font-size:11px;opacity:0.5">Added</span>':`<button class="mres-add" onclick="addLoc(${x.latitude},${x.longitude},'${x.name.replace(/'/g,"\\'")}','${sub.replace(/'/g,"\\'")}','${key}')">+ Add</button>`}</div>`;
+    }).join('');
+  }catch(e){ r.innerHTML='<div class="modal-note">Search failed</div>'; }
+}
+function addLoc(lat,lon,name,sub,key){
+  if(allLocs().some(l=>l.key===key))return;
+  userLocs.push({key,lat,lon,name,sub,top:name});
+  saveLocs(userLocs); renderDrawer(); fetchSidebar(); closeModal();
+  setTimeout(()=>pickLoc(key),100);
+}
+
+// ── Map ──
+function updateMap(lat,lon){
+  const overlayMap={wind:'wind',temp:'temp',rain:'rain',clouds:'clouds',pressure:'pressure'};
+  const ov=overlayMap[mapLayer]||'wind';
+  $('mapFrame').src=`https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&zoom=7&level=surface&overlay=${ov}&menu=&message=&marker=true&calendar=&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=%C2%B0C&radarRange=-1`;
+}
+function setMapLayer(layer,btn){
+  mapLayer=layer;
+  document.querySelectorAll('.map-toggle').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const loc=locByKey(currentLoc);
+  updateMap(loc.lat,loc.lon);
+}
+
+// ── Ecowitt station ──
+async function fetchStation(){
+  try{
+    const url=`https://api.ecowitt.net/api/v3/device/real_time?application_key=${APP_KEY}&api_key=${ECOWITT_KEY}&mac=${MAC}&call_back=all&temp_unitid=1&pressure_unitid=3&wind_speed_unitid=7&rainfall_unitid=12&solar_irradiance_unitid=16`;
+    const j=await(await fetch(url)).json();
+    if(j.code!==0)throw new Error(j.msg||'Station error');
+    const d=j.data;
+    $('err').classList.remove('show');
+    const temp=parseFloat(d.outdoor?.temperature?.value??0);
+    const hum=parseFloat(d.outdoor?.humidity?.value??0);
+    const ws=parseFloat(d.wind?.wind_speed?.value??0);
+    const wg=parseFloat(d.wind?.wind_gust?.value??0);
+    const wd=parseFloat(d.wind?.wind_direction?.value??0);
+    const wd10=parseFloat(d.wind?.['10_minute_average_wind_direction']?.value??wd);
+    const pres=parseFloat(d.pressure?.relative?.value??0);
+    const rrate=parseFloat(d.rainfall_piezo?.rain_rate?.value??d.rainfall?.rain_rate?.value??0);
+    const rdaily=parseFloat(d.rainfall_piezo?.daily?.value??d.rainfall?.daily?.value??0);
+    const uv=parseFloat(d.solar_and_uvi?.uvi?.value??0);
+    const solar=parseFloat(d.solar_and_uvi?.solar?.value??0);
+    const inT=parseFloat(d.indoor?.temperature?.value??0);
+    const inH=parseFloat(d.indoor?.humidity?.value??0);
+    const feels=parseFloat(d.outdoor?.feels_like?.value??d.outdoor?.app_temp?.value??flCalc(temp,hum,ws));
+    const dew=parseFloat(d.outdoor?.dew_point?.value??dp(temp,hum));
+
+    if(tHigh===null||temp>tHigh)tHigh=temp;
+    if(tLow===null||temp<tLow)tLow=temp;
+
+    setIcon($('heroIcon'),svgCond(rrate,uv,solar,ws));
+    $('heroTemp').innerHTML=temp.toFixed(1)+'<sup>°</sup>';
+    $('heroTemp').style.color=tColor(temp);
+    setT('heroCond',condLabel(rrate,uv,solar,ws));
+    setT('heroFeels',feels.toFixed(1)+'°'); $('heroFeels').style.color=tColor(feels);
+    setT('heroHi',(tHigh).toFixed(0)); setT('heroLo',(tLow).toFixed(0));
+
+    // wind
+    setT('wSpd',kmh2mph(ws).toFixed(0)); setT('wKmh',ws.toFixed(1)+' km/h');
+    setT('wGust',kmh2mph(wg).toFixed(0)+' mph'); setT('wGustKmh',wg.toFixed(1));
+    setT('wBft',beaufort(ws));
+    setT('wDir',deg2c(wd)); setT('wDeg',wd+'°');
+    setT('wDir10',deg2c(wd10)); setT('wDeg10',wd10+'°');
+    $('needle').setAttribute('transform',`rotate(${wd},42,42)`);
+    $('needle10').setAttribute('transform',`rotate(${wd10},42,42)`);
+
+    // feels card
+    setT('flVal',feels.toFixed(0)+'°');
+    setT('flDesc',feels<temp-1?'Wind is making it feel cooler.':feels>temp+1?'Humidity is making it feel warmer.':'Similar to the actual temperature.');
+
+    // humidity
+    setT('humVal',hum+'%'); setT('humDesc','The dew point is '+dew.toFixed(0)+'° right now.');
+
+    // pressure gauge: 980-1040 hPa range
+    const pPct=Math.max(0,Math.min(1,(pres-980)/60));
+    setT('presVal',pres.toFixed(0));
+    $('gaugeArc').style.strokeDashoffset=(157*(1-pPct)).toFixed(0);
+    $('gaugeNeedle').setAttribute('transform',`rotate(${-90+pPct*180},65,80)`);
+    setT('presTrend',pres>1013?'High':pres<1000?'Low':'Normal');
+
+    // UV
+    setT('uvVal',uv.toFixed(1)); setT('uvDesc',uvDesc(uv));
+    $('uvDot').style.left=Math.min(100,(uv/11)*100)+'%';
+
+    // precip
+    setT('precipVal',rdaily.toFixed(1)+' mm'); setT('precipSub','Today'); setT('precipDesc',rrate>0?rrate.toFixed(1)+' mm/h falling now.':'None right now.');
+
+    // indoor / station
+    setT('inTemp',inT.toFixed(1)+'°'); setT('inHum',inH+'%');
+    const batt=d.battery?.haptic_array_battery?.value??d.battery?.ws1900_batt?.value;
+    setT('battVal',batt?batt+'V':'OK'); setT('solarVal',solar.toFixed(0)+' W/m²');
+
+    // sidebar
+    const dh=$('dt_home'); if(dh){ dh.textContent=temp.toFixed(0)+'°'; dh.style.color=tColor(temp); }
+    setT('liveTime',new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+  }catch(e){ $('err').textContent='Station: '+e.message; $('err').classList.add('show'); }
+}
+
+// ── Open-Meteo forecast (hourly+daily+sun) ──
+async function fetchForecast(lat,lon,isHome){
+  try{
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation,precipitation_probability,weathercode,windspeed_10m,visibility&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=10`;
+    const d=await(await fetch(url)).json();
+    const now=Date.now();
+
+    // hourly
+    const hEl=$('hourly'); hEl.innerHTML='';
+    let n=0; const sunrise=d.daily.sunrise[0], sunset=d.daily.sunset[0];
+    const srMs=new Date(sunrise).getTime(), ssMs=new Date(sunset).getTime();
+    let sunInserted={sr:false,ss:false};
+    for(let i=0;i<d.hourly.time.length&&n<24;i++){
+      const t=new Date(d.hourly.time[i]).getTime();
+      if(t<now-3600000)continue;
+      // insert sunrise/sunset markers
+      if(!sunInserted.sr&&srMs>now&&srMs<t){ hEl.appendChild(sunCell('Sunrise',new Date(srMs))); sunInserted.sr=true; }
+      if(!sunInserted.ss&&ssMs>now&&ssMs<t){ hEl.appendChild(sunCell('Sunset',new Date(ssMs))); sunInserted.ss=true; }
+      const isNow=Math.abs(t-now)<5400000;
+      const dt=new Date(d.hourly.time[i]);
+      const lbl=isNow?'Now':dt.getHours().toString().padStart(2,'0');
+      const pop=d.hourly.precipitation_probability[i]||0;
+      const tC=d.hourly.temperature_2m[i];
+      const cell=document.createElement('div'); cell.className='hcell'+(isNow?' now':'');
+      cell.innerHTML=`<div class="hcell-time">${lbl}</div><svg class="hcell-icon" stroke="currentColor"><use href="#${wmoIcon(d.hourly.weathercode[i])}"/></svg><div class="hcell-temp" style="color:${tColor(tC)}">${tC.toFixed(0)}°</div><div class="hcell-rain">${pop>10?pop+'%':''}</div>`;
+      hEl.appendChild(cell); n++;
+    }
+
+    // daily — find min/max across all days for bar scaling
+    let gMin=Infinity,gMax=-Infinity;
+    d.daily.temperature_2m_min.forEach(v=>gMin=Math.min(gMin,v));
+    d.daily.temperature_2m_max.forEach(v=>gMax=Math.max(gMax,v));
+    const range=gMax-gMin||1;
+    const dEl=$('daily'); dEl.innerHTML='';
+    const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    d.daily.time.forEach((t,i)=>{
+      const dt=new Date(t);
+      const hi=d.daily.temperature_2m_max[i], lo=d.daily.temperature_2m_min[i];
+      const pop=d.daily.precipitation_probability_max[i]||0;
+      const lPct=((lo-gMin)/range)*100, hPct=((hi-gMin)/range)*100;
+      const row=document.createElement('div'); row.className='drow';
+      row.innerHTML=`<div class="drow-day">${i===0?'Today':dn[dt.getDay()]}</div>
+        <svg class="drow-icon" stroke="currentColor"><use href="#${wmoIcon(d.daily.weathercode[i])}"/></svg>
+        <div class="drow-pop">${pop>10?pop+'%':''}</div>
+        <div class="drow-lo" style="color:${tColor(lo)}">${lo.toFixed(0)}°</div>
+        <div class="drow-bar"><div class="drow-bar-fill" style="left:${lPct}%;width:${Math.max(8,hPct-lPct)}%"></div></div>
+        <div class="drow-hi" style="color:${tColor(hi)}">${hi.toFixed(0)}°</div>`;
+      dEl.appendChild(row);
+    });
+
+    // sun arc + times
+    const srH=new Date(sunrise), ssH=new Date(sunset);
+    setT('sunrise',srH.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+    setT('sunset',ssH.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+    const dayLen=ssMs-srMs; const prog=Math.max(0,Math.min(1,(now-srMs)/dayLen));
+    const ax=10+prog*180; const ay=70-Math.sin(prog*Math.PI)*70;
+    $('sunDot').setAttribute('cx',ax); $('sunDot').setAttribute('cy',ay);
+
+    // visibility (home uses station? no — use forecast)
+    const visM=d.hourly.visibility?.[0];
+    if(visM!==undefined){ const visMi=(visM/1609).toFixed(0); setT('visVal',visMi+' mi'); setT('visDesc',visMi>=10?'Perfectly clear view.':visMi>=5?'Good visibility.':'Reduced visibility.'); }
+
+    // if not home, fill hero + feels + humidity + precip from forecast
+    if(!isHome){
+      const cur=d.hourly.temperature_2m[findNowIdx(d.hourly.time)];
+      // handled in fetchRemote
+    }
+    // hi/lo for hero on home comes from station's running; but daily today is more useful — set if home too
+    if(isHome){ setT('heroHi',d.daily.temperature_2m_max[0].toFixed(0)); setT('heroLo',d.daily.temperature_2m_min[0].toFixed(0)); }
+  }catch(e){ $('hourly').innerHTML='<div class="placeholder">Forecast unavailable</div>'; }
+}
+
+function sunCell(label,dt){
+  const c=document.createElement('div'); c.className='hcell hcell-sun';
+  c.innerHTML=`<div class="hcell-time">${dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div><svg class="hcell-sun-icon" stroke="currentColor"><use href="#ic-sunset"/></svg><div class="hcell-sun-label">${label}</div>`;
+  return c;
+}
+function findNowIdx(times){ const now=Date.now(); let best=0,bd=Infinity; times.forEach((t,i)=>{const diff=Math.abs(new Date(t).getTime()-now); if(diff<bd){bd=diff;best=i;}}); return best; }
+
+// ── Air quality ──
+async function fetchAQI(lat,lon){
+  try{
+    const d=await(await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi&timezone=auto`)).json();
+    const aqi=d.current?.european_aqi;
+    if(aqi!==undefined){ setT('aqiVal',aqi); setT('aqiDesc',aqiDesc(aqi)); $('aqiDot').style.left=Math.min(100,(aqi/120)*100)+'%'; }
+  }catch(e){}
+}
+
+// ── Moon (simple calc) ──
+function updateMoon(){
+  // Approx moon phase calc
+  const now=new Date();
+  const lp=2551443; // lunar period seconds
+  const newMoon=new Date(2000,0,6,18,14,0).getTime()/1000;
+  const phase=((now.getTime()/1000-newMoon)%lp)/lp; // 0-1
+  const illum=Math.round((1-Math.cos(phase*2*Math.PI))/2*100);
+  const names=['New Moon','Waxing Crescent','First Quarter','Waxing Gibbous','Full Moon','Waning Gibbous','Last Quarter','Waning Crescent'];
+  const idx=Math.round(phase*8)%8;
+  setT('moonPhaseName',names[idx]); setT('moonIllum',illum+'%');
+  // shift lit circle: phase 0.5 = full (centered), 0/1 = new (off-screen)
+  const offset=phase<0.5 ? (0.5-phase)*2*30 : -(phase-0.5)*2*30;
+  $('moonLit').setAttribute('cx',32+offset);
+}
+
+// ── Remote location (non-home) ──
+async function fetchRemote(loc){
+  try{
+    const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weathercode,windspeed_10m,winddirection_10m,windgusts_10m,surface_pressure&timezone=auto`)).json();
+    const c=d.current;
+    if(c){
+      setIcon($('heroIcon'),wmoIcon(c.weathercode));
+      $('heroTemp').innerHTML=c.temperature_2m.toFixed(1)+'<sup>°</sup>'; $('heroTemp').style.color=tColor(c.temperature_2m);
+      setT('heroCond',wmoLabel(c.weathercode));
+      setT('heroFeels',c.apparent_temperature.toFixed(1)+'°'); $('heroFeels').style.color=tColor(c.apparent_temperature);
+      const ws=c.windspeed_10m, wd=c.winddirection_10m;
+      setT('wSpd',kmh2mph(ws).toFixed(0)); setT('wKmh',ws.toFixed(1)+' km/h');
+      setT('wGust',kmh2mph(c.windgusts_10m).toFixed(0)+' mph'); setT('wGustKmh',c.windgusts_10m.toFixed(1));
+      setT('wBft',beaufort(ws)); setT('wDir',deg2c(wd)); setT('wDeg',wd+'°');
+      setT('wDir10',deg2c(wd)); setT('wDeg10',wd+'°');
+      $('needle').setAttribute('transform',`rotate(${wd},42,42)`); $('needle10').setAttribute('transform',`rotate(${wd},42,42)`);
+      setT('flVal',c.apparent_temperature.toFixed(0)+'°');
+      setT('flDesc',c.apparent_temperature<c.temperature_2m-1?'Wind is making it feel cooler.':'Similar to the actual temperature.');
+      setT('humVal',c.relative_humidity_2m+'%'); setT('humDesc','The dew point is '+dp(c.temperature_2m,c.relative_humidity_2m).toFixed(0)+'° right now.');
+      const pres=c.surface_pressure; const pPct=Math.max(0,Math.min(1,(pres-980)/60));
+      setT('presVal',pres.toFixed(0)); $('gaugeArc').style.strokeDashoffset=(157*(1-pPct)).toFixed(0);
+      $('gaugeNeedle').setAttribute('transform',`rotate(${-90+pPct*180},65,80)`);
+      setT('presTrend',pres>1013?'High':pres<1000?'Low':'Normal');
+      setT('uvVal','—'); setT('uvDesc','—'); $('uvDot').style.left='0%';
+    }
+    setT('liveTime',new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+  }catch(e){}
+}
+
+// ── Sidebar temps ──
+async function fetchSidebar(){
+  for(const l of userLocs){
+    try{
+      const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${l.lat}&longitude=${l.lon}&current_weather=true&timezone=auto`)).json();
+      if(d.current_weather){ const e=$('dt_'+l.key); if(e){ e.textContent=d.current_weather.temperature.toFixed(0)+'°'; e.style.color=tColor(d.current_weather.temperature); } }
+    }catch(e){}
+  }
+}
+
+// ── Master fetch ──
+async function fetchAll(){
+  const btn=$('refreshBtn'); btn.classList.add('spin');
+  const loc=locByKey(currentLoc);
+  const isHome=currentLoc==='home';
+  const tasks=[fetchForecast(loc.lat,loc.lon,isHome), fetchAQI(loc.lat,loc.lon), fetchSidebar()];
+  if(isHome) tasks.push(fetchStation()); else tasks.push(fetchRemote(loc));
+  updateMoon();
+  await Promise.all(tasks);
+  btn.classList.remove('spin');
+}
+
+// ── Init ──
+renderDrawer();
+updateMap(HOME_LAT,HOME_LON);
+$('indoorCard').style.display='flex'; $('stationCard').style.display='flex';
+fetchAll();
+setInterval(fetchAll,60000);
+</script>
+</body>
+</html>
