@@ -103,3 +103,19 @@ end;
 $$;
 
 grant execute on function get_history(text,text,timestamptz,int) to anon, authenticated;
+
+-- ── Per-user saved favourites (cross-device sync) ───────────────
+create table if not exists user_locations (
+  id           bigint generated always as identity primary key,
+  user_id      uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  location_key text not null,
+  name         text not null,
+  sub          text,
+  lat          double precision not null,
+  lon          double precision not null,
+  created_at   timestamptz not null default now(),
+  unique(user_id, location_key)
+);
+alter table user_locations enable row level security;
+create policy "own user_locations" on user_locations
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

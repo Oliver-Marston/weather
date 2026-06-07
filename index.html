@@ -256,6 +256,22 @@ body {
 
 .placeholder { font-size: 12px; color: var(--t60); text-align: center; padding: 16px; }
 
+/* Auth gate */
+.auth-gate { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; background: linear-gradient(165deg, var(--bg-top), var(--bg-mid) 45%, var(--bg-bot)); }
+.auth-gate.hidden { display: none; }
+.auth-card { width: 340px; max-width: 100%; background: var(--card); backdrop-filter: blur(10px); border: 1px solid var(--border); border-radius: 18px; padding: 28px 24px; text-align: center; }
+.auth-logo { width: 60px; height: 60px; border-radius: 14px; margin: 0 auto 12px; display: block; }
+.auth-title { font-size: 20px; font-weight: 700; }
+.auth-sub { font-size: 13px; color: var(--t60); margin: 4px 0 18px; }
+.auth-input { width: 100%; background: rgba(255,255,255,0.15); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 16px; color: #fff; font-family: inherit; outline: none; margin-bottom: 10px; }
+.auth-input::placeholder { color: var(--t45); }
+.auth-input:focus { border-color: rgba(255,255,255,0.7); }
+.auth-btn { width: 100%; background: rgba(255,255,255,0.22); border: 1px solid var(--border); border-radius: 10px; padding: 12px; color: #fff; font-weight: 600; font-size: 15px; cursor: pointer; font-family: inherit; }
+.auth-btn:hover { background: rgba(255,255,255,0.32); }
+.auth-err { color: #ffb0b0; font-size: 13px; margin-top: 12px; min-height: 16px; }
+.drawer-signout { width: 100%; background: transparent; border: 1px solid var(--t45); border-radius: 10px; padding: 9px; color: var(--t60); font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
+.drawer-signout:hover { border-color: #fff; color: #fff; }
+
 /* ════ RESPONSIVE ════ */
 /* iPad / desktop: wider grid */
 @media (min-width: 700px) {
@@ -308,6 +324,19 @@ body {
   <symbol id="ic-solar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3"/><line x1="12" y1="2" x2="12" y2="3"/><line x1="18" y1="8" x2="19" y2="8"/><rect x="4" y="14" width="16" height="7" rx="1"/></symbol>
 </defs></svg>
 
+<!-- Auth gate -->
+<div class="auth-gate" id="authGate">
+  <div class="auth-card">
+    <img class="auth-logo" src="icon-180.png" alt="">
+    <div class="auth-title">My Weather Station</div>
+    <div class="auth-sub">Sign in to continue</div>
+    <input class="auth-input" id="authEmail" type="email" placeholder="Email" autocomplete="username" autocapitalize="off" spellcheck="false">
+    <input class="auth-input" id="authPw" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()">
+    <button class="auth-btn" onclick="signIn()">Sign in</button>
+    <div class="auth-err" id="authErr"></div>
+  </div>
+</div>
+
 <!-- Drawer -->
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
 <nav class="drawer" id="drawer">
@@ -324,6 +353,7 @@ body {
       <svg style="width:14px;height:14px" stroke="currentColor"><use href="#ic-plus"/></svg>
       Add location
     </button>
+    <button class="drawer-signout" id="signOutBtn" onclick="logout()" style="display:none;margin-top:10px">Sign out</button>
     <div style="text-align:center;font-size:10px;color:var(--t45);margin-top:10px" id="buildTag">—</div>
   </div>
 </nav>
@@ -577,6 +607,7 @@ body {
   </div>
 </div>
 
+<script src="vendor/supabase.js"></script>
 <script>
 // ── Config ──
 const ECOWITT_KEY='19e71687-f879-409b-b97c-c6228954a8ba';
@@ -609,6 +640,36 @@ async function syncLocations(){
   }catch(e){}
 }
 function locByKey(k){ if(k==='current') return currentGeoLoc; return allLocs().find(l=>l.key===k); }
+
+// ── Supabase client + auth (gated login, per-user favourites) ──
+let sb=null, _uid=null, _started=false;
+function showGate(msg){ const g=$('authGate'); if(g) g.classList.remove('hidden'); if(msg&&$('authErr')) $('authErr').textContent=msg; }
+function hideGate(){ const g=$('authGate'); if(g) g.classList.add('hidden'); }
+async function signIn(){
+  if(!sb){ $('authErr').textContent='Still loading — try again in a second.'; return; }
+  const email=$('authEmail').value.trim(), password=$('authPw').value;
+  if(!email||!password){ $('authErr').textContent='Enter your email and password.'; return; }
+  $('authErr').textContent='Signing in…';
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  if(error) $('authErr').textContent=error.message; // success → onAuthStateChange
+}
+async function logout(){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); }
+function initAuth(){
+  if(typeof supabase==='undefined'){ showGate('Could not load sign-in (offline?). Reconnect and reload.'); return; }
+  sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{auth:{persistSession:true,autoRefreshToken:true}});
+  sb.auth.onAuthStateChange((evt,session)=>{ if(session){ _uid=session.user.id; hideGate(); startApp(); } else if(evt==='SIGNED_OUT'){ showGate(); } });
+  sb.auth.getSession().then(({data})=>{ if(data&&data.session){ _uid=data.session.user.id; hideGate(); startApp(); } else showGate(); });
+}
+// per-user favourite storage (cross-device)
+async function loadUserLocs(){
+  if(!sb) return null;
+  const {data,error}=await sb.from('user_locations').select('location_key,name,sub,lat,lon').order('created_at');
+  if(error||!Array.isArray(data)) return null;
+  return data.map(r=>({key:r.location_key,name:r.name,sub:r.sub,lat:r.lat,lon:r.lon,top:r.name}));
+}
+async function dbAddUserLoc(l){ if(!sb||!_uid) return; try{ await sb.from('user_locations').upsert({user_id:_uid,location_key:l.key,name:l.name,sub:l.sub||null,lat:l.lat,lon:l.lon},{onConflict:'user_id,location_key'}); }catch(e){} }
+async function dbRemoveUserLoc(key){ if(!sb) return; try{ await sb.from('user_locations').delete().eq('location_key',key); }catch(e){} }
+
 let currentLoc='home';
 function isHomeView(){ return currentLoc==='home' || (currentLoc==='current' && currentGeoLoc && currentGeoLoc.atHome); }
 let mapLayer='wind';
@@ -689,7 +750,7 @@ function pickLoc(key){
 function removeLoc(e,key){
   e.stopPropagation();
   userLocs=userLocs.filter(l=>l.key!==key);
-  saveLocs(userLocs);
+  saveLocs(userLocs); dbRemoveUserLoc(key);
   if(currentLoc===key) pickLoc('home');
   else {
     renderDrawer(); fetchSidebar();
@@ -764,8 +825,9 @@ async function doSearch(){
 }
 function addLoc(lat,lon,name,sub,key){
   if(allLocs().some(l=>l.key===key))return;
-  userLocs.push({key,lat,lon,name,sub,top:name});
-  saveLocs(userLocs); syncLocations(); renderDrawer(); fetchSidebar(); closeModal();
+  const loc={key,lat,lon,name,sub,top:name};
+  userLocs.push(loc);
+  saveLocs(userLocs); dbAddUserLoc(loc); syncLocations(); renderDrawer(); fetchSidebar(); closeModal();
   setTimeout(()=>pickLoc(key),100);
 }
 
@@ -1199,7 +1261,7 @@ async function fetchAll(){
 }
 
 // ── App version / updates ──
-const APP_BUILD='v13 · 2026-06-07';
+const APP_BUILD='v14 · 2026-06-07';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
@@ -1220,15 +1282,28 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
 }
 
+// ── App start (runs only after a successful sign-in) ──
+async function startApp(){
+  if(_started) return; _started=true;
+  setBuildTag();
+  const so=$('signOutBtn'); if(so) so.style.display='block';
+  // Load this user's favourites from the DB (cross-device); migrate local cache on first login.
+  try{
+    let db=await loadUserLocs();
+    if(db && db.length===0){ for(const l of userLocs){ await dbAddUserLoc(l); } db=await loadUserLocs(); }
+    if(db) { userLocs=db; saveLocs(userLocs); }
+  }catch(e){}
+  syncLocations();
+  renderDrawer();
+  updateMap(HOME_LAT,HOME_LON);
+  setHomeCards(true);
+  fetchAll();
+  resetHistLocs(); renderHistLocs(); fetchHistory();
+  setInterval(fetchAll,60000);
+}
+
 // ── Init ──
-setBuildTag();
-syncLocations();
-renderDrawer();
-updateMap(HOME_LAT,HOME_LON);
-setHomeCards(true);
-fetchAll();
-resetHistLocs(); renderHistLocs(); fetchHistory();
-setInterval(fetchAll,60000);
+initAuth();
 </script>
 </body>
 </html>
