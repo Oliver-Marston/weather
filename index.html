@@ -880,28 +880,32 @@ function updateMoon(){
 // ── Remote location (non-home) ──
 async function fetchRemote(loc){
   try{
-    const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weathercode,windspeed_10m,winddirection_10m,windgusts_10m,surface_pressure&timezone=auto`)).json();
+    const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m,weathercode,windspeed_10m,winddirection_10m,wind_gusts_10m,surface_pressure,uv_index&timezone=auto`)).json();
     const c=d.current;
     if(c){
+      const temp=c.temperature_2m, hum=c.relative_humidity_2m;
+      const ws=c.windspeed_10m, wd=c.winddirection_10m, gust=c.wind_gusts_10m??0;
+      const feels=flCalc(temp,hum,ws); // conventional feels-like (no solar term), matches the home station
       setIcon($('heroIcon'),wmoIcon(c.weathercode));
-      $('heroTemp').innerHTML=c.temperature_2m.toFixed(1)+'<sup>°</sup>'; $('heroTemp').style.color=tColor(c.temperature_2m);
+      $('heroTemp').innerHTML=temp.toFixed(1)+'<sup>°</sup>'; $('heroTemp').style.color=tColor(temp);
       setT('heroCond',wmoLabel(c.weathercode));
-      setT('heroFeels',c.apparent_temperature.toFixed(1)+'°'); $('heroFeels').style.color=tColor(c.apparent_temperature);
-      const ws=c.windspeed_10m, wd=c.winddirection_10m;
+      setT('heroFeels',feels.toFixed(1)+'°'); $('heroFeels').style.color=tColor(feels);
       setT('wSpd',kmh2mph(ws).toFixed(0)); setT('wKmh',ws.toFixed(1)+' km/h');
-      setT('wGust',kmh2mph(c.windgusts_10m).toFixed(0)+' mph'); setT('wGustKmh',c.windgusts_10m.toFixed(1));
+      setT('wGust',kmh2mph(gust).toFixed(0)+' mph'); setT('wGustKmh',gust.toFixed(1));
       setT('wBft',beaufort(ws)); setT('wDir',deg2c(wd)); setT('wDeg',wd+'°');
       setT('wDir10',deg2c(wd)); setT('wDeg10',wd+'°');
       $('needle').setAttribute('transform',`rotate(${wd},42,42)`); $('needle10').setAttribute('transform',`rotate(${wd},42,42)`);
-      setT('flVal',c.apparent_temperature.toFixed(0)+'°');
-      setT('flDesc',c.apparent_temperature<c.temperature_2m-1?'Wind is making it feel cooler.':'Similar to the actual temperature.');
-      setT('humVal',c.relative_humidity_2m+'%'); setT('humDesc','The dew point is '+dp(c.temperature_2m,c.relative_humidity_2m).toFixed(0)+'° right now.');
+      setT('flVal',feels.toFixed(0)+'°');
+      setT('flDesc',feels<temp-1?'Wind is making it feel cooler.':feels>temp+1?'Humidity is making it feel warmer.':'Similar to the actual temperature.');
+      setT('humVal',hum+'%'); setT('humDesc','The dew point is '+dp(temp,hum).toFixed(0)+'° right now.');
       const pres=c.surface_pressure; const pPct=Math.max(0,Math.min(1,(pres-980)/60));
       setT('presVal',pres.toFixed(0)); $('gaugeArc').style.strokeDashoffset=(157*(1-pPct)).toFixed(0);
       $('gaugeNeedle').setAttribute('transform',`rotate(${-90+pPct*180},65,80)`);
       setT('presTrend',pres>1013?'High':pres<1000?'Low':'Normal');
-      setT('uvVal','—'); setT('uvDesc','—'); $('uvDot').style.left='0%';
-      if(currentLoc==='current'){ const dc=$('dt_current'); if(dc){ dc.textContent=c.temperature_2m.toFixed(0)+'°'; dc.style.color=tColor(c.temperature_2m); } }
+      const uv=c.uv_index;
+      if(uv!=null){ setT('uvVal',uv.toFixed(1)); setT('uvDesc',uvDesc(uv)); $('uvDot').style.left=Math.min(100,(uv/11)*100)+'%'; }
+      else { setT('uvVal','—'); setT('uvDesc','—'); $('uvDot').style.left='0%'; }
+      if(currentLoc==='current'){ const dc=$('dt_current'); if(dc){ dc.textContent=temp.toFixed(0)+'°'; dc.style.color=tColor(temp); } }
     }
     setT('liveTime',new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
   }catch(e){}
@@ -931,7 +935,7 @@ async function fetchAll(){
 }
 
 // ── App version / updates ──
-const APP_BUILD='v7 · 2026-06-07';
+const APP_BUILD='v8 · 2026-06-07';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
