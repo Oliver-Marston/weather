@@ -268,6 +268,8 @@ body {
 .auth-input:focus { border-color: rgba(255,255,255,0.7); }
 .auth-btn { width: 100%; background: rgba(255,255,255,0.22); border: 1px solid var(--border); border-radius: 10px; padding: 12px; color: #fff; font-weight: 600; font-size: 15px; cursor: pointer; font-family: inherit; }
 .auth-btn:hover { background: rgba(255,255,255,0.32); }
+.auth-toggle { margin-top: 14px; font-size: 13px; color: var(--cool); cursor: pointer; }
+.auth-toggle:hover { text-decoration: underline; }
 .auth-err { color: #ffb0b0; font-size: 13px; margin-top: 12px; min-height: 16px; }
 .drawer-signout { width: 100%; background: transparent; border: 1px solid var(--t45); border-radius: 10px; padding: 9px; color: var(--t60); font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
 .drawer-signout:hover { border-color: #fff; color: #fff; }
@@ -331,8 +333,9 @@ body {
     <div class="auth-title">My Weather Station</div>
     <div class="auth-sub">Sign in to continue</div>
     <input class="auth-input" id="authEmail" type="email" placeholder="Email" autocomplete="username" autocapitalize="off" spellcheck="false">
-    <input class="auth-input" id="authPw" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')signIn()">
-    <button class="auth-btn" onclick="signIn()">Sign in</button>
+    <input class="auth-input" id="authPw" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authSubmit()">
+    <button class="auth-btn" id="authBtn" onclick="authSubmit()">Sign in</button>
+    <div class="auth-toggle" id="authToggle" onclick="toggleAuthMode()">New here? Create an account</div>
     <div class="auth-err" id="authErr"></div>
   </div>
 </div>
@@ -645,13 +648,36 @@ function locByKey(k){ if(k==='current') return currentGeoLoc; return allLocs().f
 let sb=null, _uid=null, _started=false;
 function showGate(msg){ const g=$('authGate'); if(g) g.classList.remove('hidden'); if(msg&&$('authErr')) $('authErr').textContent=msg; }
 function hideGate(){ const g=$('authGate'); if(g) g.classList.add('hidden'); }
+let authMode='signin';
+function toggleAuthMode(){
+  authMode = authMode==='signin' ? 'signup' : 'signin';
+  $('authBtn').textContent = authMode==='signin' ? 'Sign in' : 'Create account';
+  $('authToggle').textContent = authMode==='signin' ? 'New here? Create an account' : 'Have an account? Sign in';
+  const sub=document.querySelector('.auth-sub'); if(sub) sub.textContent = authMode==='signin' ? 'Sign in to continue' : 'Create your account';
+  $('authErr').style.color=''; $('authErr').textContent='';
+}
+function authSubmit(){ return authMode==='signin' ? signIn() : signUp(); }
 async function signIn(){
   if(!sb){ $('authErr').textContent='Still loading — try again in a second.'; return; }
   const email=$('authEmail').value.trim(), password=$('authPw').value;
   if(!email||!password){ $('authErr').textContent='Enter your email and password.'; return; }
-  $('authErr').textContent='Signing in…';
+  $('authErr').style.color=''; $('authErr').textContent='Signing in…';
   const {error}=await sb.auth.signInWithPassword({email,password});
   if(error) $('authErr').textContent=error.message; // success → onAuthStateChange
+}
+async function signUp(){
+  if(!sb){ $('authErr').textContent='Still loading — try again in a second.'; return; }
+  const email=$('authEmail').value.trim(), password=$('authPw').value;
+  if(!email||!password){ $('authErr').textContent='Enter your email and a password (6+ characters).'; return; }
+  $('authErr').style.color=''; $('authErr').textContent='Creating account…';
+  const {data,error}=await sb.auth.signUp({email,password});
+  if(error){ $('authErr').textContent=error.message; return; }
+  if(data.session){ $('authErr').textContent=''; /* auto signed in → onAuthStateChange boots */ }
+  else { // email confirmation required
+    $('authErr').style.color='#bfe3c0';
+    $('authErr').textContent='Account created — check your email to confirm, then sign in.';
+    authMode='signin'; $('authBtn').textContent='Sign in'; $('authToggle').textContent='New here? Create an account';
+  }
 }
 async function logout(){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); }
 function initAuth(){
@@ -1261,7 +1287,7 @@ async function fetchAll(){
 }
 
 // ── App version / updates ──
-const APP_BUILD='v14 · 2026-06-07';
+const APP_BUILD='v15 · 2026-06-07';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
