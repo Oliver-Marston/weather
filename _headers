@@ -1,0 +1,8 @@
+# Netlify headers — force the HTML/manifest to revalidate so updates
+# show up in installed (Add to Home Screen) web apps without re-adding.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/site.webmanifest
+  Cache-Control: no-cache
