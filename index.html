@@ -640,24 +640,18 @@ select.modal-input { appearance: none; -webkit-appearance: none; }
 <script src="vendor/supabase.js"></script>
 <script>
 // ── Config ──
-const ECOWITT_KEY='19e71687-f879-409b-b97c-c6228954a8ba';
-const APP_KEY='E7DFEA21A613BF9B0C8F44E354C1C087';
-const MAC='8C:4F:00:4F:E6:77';
-const HOME_LAT=52.7868543, HOME_LON=-1.1251226;
 // Supabase (publishable/anon — safe to expose; read-only via RLS)
 const SUPABASE_URL='https://xysslvzlmpgmseimqito.supabase.co';
 const SUPABASE_ANON='sb_publishable_V8cr4rmElEYqHJZ9OAXQDw_Uw9r0tLs';
-
-// Built-in home station (legacy; treated as just another station). Removed in a later stage.
-const HOME_LOC={key:'home',lat:HOME_LAT,lon:HOME_LON,name:'Home',sub:'Burton-on-the-Wolds · Live station',top:'Home — Burton-on-the-Wolds',isStation:true,creds:{app_key:APP_KEY,api_key:ECOWITT_KEY,mac:MAC}};
 const NEAR_STATION_KM=4; // current location within this of one of your stations → show that live station
+const DEFAULT_CITY={lat:51.5074,lon:-0.1278,name:'London',sub:'England, UK'}; // friendly fallback when there's no station/location
 let currentGeoLoc=null;  // resolved geolocation result, behaves as the 'current' location
 let userStations=[];     // the signed-in user's weather stations (loaded from the DB)
 function haversineKm(la1,lo1,la2,lo2){ const R=6371,r=Math.PI/180; const dLa=(la2-la1)*r,dLo=(lo2-lo1)*r; const a=Math.sin(dLa/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(a)); }
 function loadLocs(){ try{return JSON.parse(localStorage.getItem('wxLocs')||'[]')}catch(e){return[]} }
 function saveLocs(l){ localStorage.setItem('wxLocs',JSON.stringify(l.filter(x=>!x.fixed))) }
 let userLocs=loadLocs(); // favourites cache for instant paint; replaced from the DB after login
-function allStations(){ return [HOME_LOC, ...userStations]; }
+function allStations(){ return [...userStations]; }
 function allLocs(){ return [...allStations(), ...userLocs]; }
 // Push saved favourites into the DB so the 30-min logger (and history) tracks them too.
 async function syncLocations(){
@@ -704,7 +698,7 @@ async function signUp(){
     authMode='signin'; $('authBtn').textContent='Sign in'; $('authToggle').textContent='New here? Create an account';
   }
 }
-async function logout(){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); }
+async function logout(){ try{ localStorage.removeItem('wxLocs'); }catch(e){} try{ await sb.auth.signOut(); }catch(e){} location.reload(); }
 function initAuth(){
   if(typeof supabase==='undefined'){ showGate('Could not load sign-in (offline?). Reconnect and reload.'); return; }
   sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{auth:{persistSession:true,autoRefreshToken:true}});
@@ -739,7 +733,7 @@ async function dbAddUserStation(st){
 }
 async function dbRemoveUserStation(key){ if(!sb) return; try{ await sb.from('user_stations').delete().eq('station_key',key); }catch(e){} }
 
-let currentLoc='home';
+let currentLoc=null; // set by defaultView() after sign-in
 function isStationView(){ const l=locByKey(currentLoc); return !!(l&&l.isStation) || (currentLoc==='current'&&currentGeoLoc&&currentGeoLoc.nearStationKey); }
 let mapLayer='wind';
 let tHigh=null,tLow=null;
@@ -787,6 +781,7 @@ function renderDrawer(){
     <div class="dloc-temp" id="dt_current">${currentGeoLoc?'--°':'›'}</div>
   </div>
   <div class="drawer-sect">My Stations</div>`;
+  if(!allStations().length){ h+=`<div class="dloc" onclick="openSettings()" style="cursor:pointer"><svg class="dloc-icon" stroke="currentColor"><use href="#ic-home"/></svg><div class="dloc-info"><div class="dloc-name">Add a station</div><div class="dloc-sub">Settings → connect Ecowitt</div></div></div>`; }
   allStations().forEach(s=>{
     h+=`<div class="dloc ${currentLoc===s.key?'active':''}" onclick="pickLoc('${s.key}')">
       <svg class="dloc-icon" stroke="currentColor"><use href="#ic-home"/></svg>
@@ -821,8 +816,10 @@ function pickLoc(key){
   resetHistLocs(); renderHistLocs(); fetchHistory();
 }
 
-// Pick the sensible default view: the user's own first station, else built-in home.
-function defaultView(){ if(userStations.length) return pickLoc(userStations[0].key); return pickLoc('home'); }
+// Show a city forecast (no station) via the 'current' slot — used as a friendly fallback.
+function showCity(c){ currentLoc='current'; currentGeoLoc={key:'current',lat:c.lat,lon:c.lon,name:c.name,sub:c.sub||'',top:c.name,nearStationKey:null}; applyCurrentView(); }
+// Default view: your first station, else your current location (London if that's unavailable).
+function defaultView(){ if(userStations.length) return pickLoc(userStations[0].key); return pickCurrent(); }
 
 function removeLoc(e,key){
   e.stopPropagation();
@@ -881,9 +878,11 @@ function onGeoErr(err){
   if(currentLoc!=='current') return;
   currentGeoLoc=null;
   const msg = err.code===1?'Location permission denied.':err.code===3?'Location request timed out.':'Could not get your location.';
-  setT('topLoc','Current Location'); setT('topSub',msg);
   showErr(msg);
-  defaultView(true); // fall back without re-prompting geolocation
+  // fall back WITHOUT re-prompting geolocation
+  if(userStations.length) return pickLoc(userStations[0].key);
+  if(userLocs.length) return pickLoc(userLocs[0].key);
+  showCity(DEFAULT_CITY);
 }
 function applyCurrentView(){
   tHigh=null; tLow=null;
@@ -1249,11 +1248,11 @@ const HIST_PALETTE=['#ff8a3d','#2ce0d0','#aaddff','#facc15','#c084fc','#7de87d',
 // Stable colour per location (hash of key) so adding/removing favourites never recolours others. Home is pinned.
 function locColor(key){ if(key==='home') return HIST_PALETTE[0]; let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0; return HIST_PALETTE[1+(h%(HIST_PALETTE.length-1))]; }
 let histMetric='temp', histRange='7';
-let histLocsSel=new Set(['home']);
+let histLocsSel=new Set();
 let _hist=null, _histRaw=null, _histReq=0;
 
 function defaultHistKey(){ if(currentLoc==='current') return (currentGeoLoc&&currentGeoLoc.nearStationKey)?currentGeoLoc.nearStationKey:null; return currentLoc; }
-function resetHistLocs(){ const k=defaultHistKey()||'home'; histLocsSel = new Set([k]); } // away 'current' has no station → fall back to Home
+function resetHistLocs(){ const k=defaultHistKey(); histLocsSel = k ? new Set([k]) : new Set(); }
 function setHistMetric(m,btn){ histMetric=m; document.querySelectorAll('#histMetrics .map-toggle').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); fetchHistory(); }
 function setHistRange(r,btn){ histRange=r; document.querySelectorAll('#histRanges .map-toggle').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); fetchHistory(); }
 function toggleHistLoc(key){ if(histLocsSel.has(key)){ if(histLocsSel.size>1) histLocsSel.delete(key); } else histLocsSel.add(key); renderHistLocs(); fetchHistory(); }
@@ -1407,7 +1406,7 @@ async function fetchAll(){
 }
 
 // ── App version / updates ──
-const APP_BUILD='v17 · 2026-06-07';
+const APP_BUILD='v18 · 2026-06-08';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
@@ -1433,13 +1432,14 @@ async function startApp(){
   if(_started) return; _started=true;
   setBuildTag();
   const so=$('signOutBtn'); if(so) so.style.display='block';
-  // Load this user's stations + favourites from the DB (cross-device); migrate local favourites on first login.
+  // Load this user's stations + favourites from the DB (authoritative, cross-device).
+  // No localStorage migration — that would leak one account's favourites into another on a shared browser.
   try{
     userStations=await loadUserStations();
-    let db=await loadUserLocs();
-    if(db && db.length===0){ for(const l of userLocs){ await dbAddUserLoc(l); } db=await loadUserLocs(); }
-    if(db) { userLocs=db; saveLocs(userLocs); }
-  }catch(e){}
+    const db=await loadUserLocs();
+    userLocs = db || [];
+    saveLocs(userLocs); // cache only the signed-in user's own favourites
+  }catch(e){ userLocs=[]; }
   syncLocations();
   renderDrawer();
   defaultView();              // first station, else built-in home
