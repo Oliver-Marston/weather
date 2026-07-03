@@ -28,17 +28,23 @@
   --warm: #ff8a3d;
   --cool: #2ce0d0;
   --rain: #aaddff;
-  /* Derived surfaces — literal fallbacks first so engines without color-mix keep today's blues */
+  /* Derived surfaces — literal defaults. The themed color-mix versions live on
+     body inside @supports below: custom properties don't fall back on invalid
+     values, and var() must re-resolve on the element carrying the theme class. */
   --panel-hi: #357ab0;
   --panel-lo: #1a4d7a;
   --bar: rgba(45,110,160,0.5);
   --hub: rgba(30,80,120,0.9);
   --tip-bg: rgba(6,16,28,0.94);
   --ink: #0b2235;
-  --panel-hi: color-mix(in srgb, var(--bg-mid) 88%, white);
-  --panel-lo: color-mix(in srgb, var(--bg-bot) 92%, black);
-  --bar: color-mix(in srgb, var(--bg-mid) 55%, transparent);
-  --hub: color-mix(in srgb, var(--bg-mid) 50%, black);
+}
+@supports (color: color-mix(in srgb, red, white)) {
+  body {
+    --panel-hi: color-mix(in srgb, var(--bg-mid) 88%, white);
+    --panel-lo: color-mix(in srgb, var(--bg-bot) 92%, black);
+    --bar: color-mix(in srgb, var(--bg-mid) 55%, transparent);
+    --hub: color-mix(in srgb, var(--bg-mid) 50%, black);
+  }
 }
 /* ── Weather theme palettes (body class set by setWeatherTheme) ── */
 .theme-clear-day    { --bg-top:#4aa3e0; --bg-mid:#2176b5; --bg-bot:#0f4d82; }
@@ -66,51 +72,59 @@ body {
 .sky-grad { position: absolute; inset: 0; transition: opacity 1.2s ease; }
 #skyA { background: linear-gradient(165deg, var(--bg-top) 0%, var(--bg-mid) 45%, var(--bg-bot) 100%); }
 #skyB { opacity: 0; }
-.sky-fx { position: absolute; opacity: 0; transition: opacity 1.5s ease; will-change: transform, opacity; }
+.sky-fx { position: absolute; opacity: 0; transition: opacity 1.5s ease; }
+/* Effects declare their animation PAUSED (longhand after shorthand); the
+   per-theme rules below both reveal a layer and set it running — hidden
+   layers cost the compositor nothing. */
 .sky-glow { top: -22vh; left: 50%; width: 76vmin; height: 76vmin; margin-left: -38vmin; border-radius: 50%;
   background: radial-gradient(circle, rgba(255,220,150,0.35), transparent 62%);
-  animation: glowPulse 24s ease-in-out infinite; }
+  animation: glowPulse 24s ease-in-out infinite; animation-play-state: paused; }
 .sky-blob { border-radius: 50%; }
 .sky-blob--a { top: 6vh; left: -18vmin; width: 66vmin; height: 66vmin;
   background: radial-gradient(closest-side, rgba(255,255,255,0.10), transparent 70%);
-  animation: skyDrift1 40s ease-in-out infinite; }
+  animation: skyDrift1 40s ease-in-out infinite; animation-play-state: paused; }
 .sky-blob--b { bottom: -8vh; right: -20vmin; width: 72vmin; height: 72vmin;
   background: radial-gradient(closest-side, rgba(255,255,255,0.09), transparent 70%);
-  animation: skyDrift2 55s ease-in-out infinite; }
-.sky-stars { inset: 0;
+  animation: skyDrift2 55s ease-in-out infinite; animation-play-state: paused; }
+.sky-stars { inset: 0; --stars-o: 0;
   background-image:
     radial-gradient(1px 1px at 22px 34px, rgba(255,255,255,0.8), transparent 1.5px),
     radial-gradient(1px 1px at 121px 90px, rgba(255,255,255,0.6), transparent 1.5px),
     radial-gradient(1.5px 1.5px at 190px 152px, rgba(255,255,255,0.7), transparent 2px),
     radial-gradient(1px 1px at 66px 187px, rgba(255,255,255,0.5), transparent 1.5px);
   background-size: 240px 240px, 380px 380px, 300px 300px, 340px 340px;
-  animation: twinkle 9s ease-in-out infinite; }
+  animation: twinkle 9s ease-in-out infinite; animation-play-state: paused; }
+/* rainDrift translates by an exact multiple of the stripe pattern's vertical
+   period (23px / cos15° ≈ 23.81px; ×10 = 238.1px) so the loop is seamless. */
 .sky-rain { left: 0; right: 0; top: -100%; height: 200%;
   background: repeating-linear-gradient(105deg, transparent 0 22px, rgba(255,255,255,0.045) 22px 23px);
-  animation: rainDrift 5.5s linear infinite; }
+  animation: rainDrift 2.4s linear infinite; animation-play-state: paused; }
 @keyframes glowPulse { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.06); } }
 @keyframes skyDrift1 { 0%,100%{ transform: translate(0,0) scale(1); } 50%{ transform: translate(-46px,52px) scale(1.11); } }
 @keyframes skyDrift2 { 0%,100%{ transform: translate(0,0) scale(1); } 50%{ transform: translate(52px,-44px) scale(1.09); } }
-@keyframes twinkle { 0%,100%{ opacity: var(--stars-o,0.9); } 50%{ opacity: calc(var(--stars-o,0.9)*0.65); } }
-@keyframes rainDrift { from{ transform: translateY(0); } to{ transform: translateY(50%); } }
-/* per-theme ambient visibility */
-.theme-clear-day .sky-glow { opacity: 1; }
-.theme-partly-day .sky-glow { opacity: 0.4; }
-.theme-partly-day .sky-blob { opacity: 0.8; }
-.theme-partly-night .sky-blob { opacity: 0.4; }
-.theme-partly-night .sky-stars { opacity: 0.5; --stars-o: 0.5; }
-.theme-clear-night .sky-stars { opacity: 0.9; --stars-o: 0.9; }
-.theme-overcast .sky-blob { opacity: 1; }
-.theme-fog .sky-blob { opacity: 1; }
-.theme-rain-day .sky-blob { opacity: 0.5; }
-.theme-rain-day .sky-rain { opacity: 1; }
-.theme-rain-night .sky-stars { opacity: 0.3; --stars-o: 0.3; }
-.theme-rain-night .sky-rain { opacity: 0.7; }
-.theme-snow .sky-blob { opacity: 1; }
-.theme-storm .sky-blob { opacity: 0.8; }
-.theme-storm .sky-rain { opacity: 1; }
-.theme-golden .sky-glow { opacity: 1; }
-.theme-golden .sky-blob { opacity: 0.5; }
+@keyframes twinkle { 0%,100%{ opacity: var(--stars-o,0); } 50%{ opacity: calc(var(--stars-o,0)*0.65); } }
+@keyframes rainDrift { from{ transform: translateY(0); } to{ transform: translateY(238.1px); } }
+/* per-theme ambient visibility (reveal + run) */
+.theme-clear-day .sky-glow { opacity: 1; animation-play-state: running; }
+.theme-partly-day .sky-glow { opacity: 0.4; animation-play-state: running; }
+.theme-partly-day .sky-blob { opacity: 0.8; animation-play-state: running; }
+.theme-partly-night .sky-blob { opacity: 0.4; animation-play-state: running; }
+.theme-partly-night .sky-stars { opacity: 0.5; --stars-o: 0.5; animation-play-state: running; }
+.theme-clear-night .sky-stars { opacity: 0.9; --stars-o: 0.9; animation-play-state: running; }
+.theme-overcast .sky-blob { opacity: 1; animation-play-state: running; }
+.theme-fog .sky-blob { opacity: 1; animation-play-state: running; }
+.theme-rain-day .sky-blob { opacity: 0.5; animation-play-state: running; }
+.theme-rain-day .sky-rain { opacity: 1; animation-play-state: running; }
+.theme-rain-night .sky-stars { opacity: 0.3; --stars-o: 0.3; animation-play-state: running; }
+.theme-rain-night .sky-rain { opacity: 0.7; animation-play-state: running; }
+.theme-snow .sky-blob { opacity: 1; animation-play-state: running; }
+.theme-storm .sky-blob { opacity: 0.8; animation-play-state: running; }
+.theme-storm .sky-rain { opacity: 1; animation-play-state: running; }
+.theme-golden .sky-glow { opacity: 1; animation-play-state: running; }
+.theme-golden .sky-blob { opacity: 0.5; animation-play-state: running; }
+/* Light palettes: lift muted-text alphas + a hair of hero shadow for contrast */
+.theme-snow, .theme-fog, .theme-overcast { --t60: rgba(255,255,255,0.75); --t45: rgba(255,255,255,0.6); }
+.hero-temp, .hero-cond, .hero-feels { text-shadow: 0 1px 3px rgba(0,0,0,0.25); }
 
 /* ── Drawer nav ── */
 .drawer-overlay {
@@ -755,7 +769,7 @@ function allLocs(){ return [...allStations(), ...userLocs]; }
 function locByKey(k){ if(k==='current') return currentGeoLoc; return allLocs().find(l=>l.key===k); }
 
 // ── Supabase client + auth (gated login, per-user favourites) ──
-let sb=null, _uid=null, _started=false;
+let sb=null, _uid=null, _started=false, _pollId=null;
 function showGate(msg){ const g=$('authGate'); if(g) g.classList.remove('hidden'); if(msg&&$('authErr')) $('authErr').textContent=msg; }
 function hideGate(){ const g=$('authGate'); if(g) g.classList.add('hidden'); }
 let authMode='signin';
@@ -793,7 +807,7 @@ async function logout(){ try{ localStorage.removeItem('wxLocs'); }catch(e){} try
 function initAuth(){
   if(typeof supabase==='undefined'){ showGate('Could not load sign-in (offline?). Reconnect and reload.'); return; }
   sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{auth:{persistSession:true,autoRefreshToken:true}});
-  sb.auth.onAuthStateChange((evt,session)=>{ if(session){ _uid=session.user.id; hideGate(); startApp(); } else if(evt==='SIGNED_OUT'){ setWeatherTheme('partly-day'); showGate(); } });
+  sb.auth.onAuthStateChange((evt,session)=>{ if(session){ _uid=session.user.id; hideGate(); startApp(); } else if(evt==='SIGNED_OUT'){ if(_pollId){clearInterval(_pollId);_pollId=null;} _stnNow=_rmNow=_fcNow=null; setWeatherTheme('partly-day'); showGate(); } });
   sb.auth.getSession().then(({data})=>{ if(data&&data.session){ _uid=data.session.user.id; hideGate(); startApp(); } else showGate(); });
 }
 // per-user favourite storage (cross-device)
@@ -883,16 +897,20 @@ function wmoTheme(c,isDay){
 // cloud sensor at night and no thunder/snow detection).
 function stationTheme(snap,fcNow){
   const base=fcNow?wmoTheme(fcNow.code,fcNow.isDay):null;
-  if(snap.rrate>0 && base!=='storm' && base!=='snow') return (fcNow&&fcNow.isDay===false)?'rain-night':'rain-day';
+  if(fcNow && snap.rrate>0 && base!=='storm' && base!=='snow') return fcNow.isDay===false?'rain-night':'rain-day';
   if(base){
     if(fcNow.isDay){
       if(snap.solar>700||snap.uv>=8) return 'clear-day';
-      if(snap.solar<50 && base!=='fog' && base!=='storm' && base!=='snow' && base!=='rain-day') return 'overcast';
+      // Low solar only means "overcast" when the sun is meaningfully up —
+      // not at dawn/dusk (station views are physically local, so the browser
+      // clock vs the co-fetched sunrise/sunset is trustworthy here).
+      const now=Date.now();
+      const midday=!(fcNow.srMs&&fcNow.ssMs)||(now>fcNow.srMs+45*60000&&now<fcNow.ssMs-45*60000);
+      if(midday && snap.solar<50 && base!=='fog' && base!=='storm' && base!=='snow' && base!=='rain-day') return 'overcast';
     }
     return base;
   }
-  // Fallback (forecast missing): the station is physically local, so the
-  // browser clock is trustworthy here — the only place it's used.
+  // Fallback (forecast missing): local clock + solar.
   const hr=new Date().getHours(), night=snap.solar<5&&(hr<6||hr>=20);
   if(snap.rrate>0) return night?'rain-night':'rain-day';
   if(night) return 'clear-night';
@@ -900,20 +918,28 @@ function stationTheme(snap,fcNow){
   if(snap.solar<50) return 'overcast';
   return 'partly-day';
 }
+const _grad=t=>`linear-gradient(165deg, ${t.top} 0%, ${t.mid} 45%, ${t.bot} 100%)`;
 let _activeSky=0, _curTheme='partly-day';
-const _themeLock=new URLSearchParams(location.search).get('theme');
+const _themeParam=new URLSearchParams(location.search).get('theme');
+const _themeLock=(_themeParam&&THEMES[_themeParam])?_themeParam:null; // invalid value = no lock
 function setWeatherTheme(key){
   if(!THEMES[key]||key===_curTheme) return;
+  const layers=[$('skyA'),$('skyB')];
+  // Freeze the outgoing layer: #skyA's CSS gradient is var()-driven, so the
+  // body-class flip below would otherwise re-colour it instantly (hard cut).
+  if(layers[_activeSky]&&!layers[_activeSky].style.background) layers[_activeSky].style.background=_grad(THEMES[_curTheme]);
   _curTheme=key;
   document.body.className=(document.body.className.replace(/\btheme-[\w-]+/g,'').trim()+' theme-'+key).trim();
-  const t=THEMES[key], layers=[$('skyA'),$('skyB')], back=layers[1-_activeSky];
-  back.style.background=`linear-gradient(165deg, ${t.top} 0%, ${t.mid} 45%, ${t.bot} 100%)`;
-  back.style.opacity=1; layers[_activeSky].style.opacity=0; _activeSky=1-_activeSky;
+  const t=THEMES[key], back=layers[1-_activeSky];
+  if(back){ back.style.background=_grad(t); back.style.opacity=1; }
+  if(layers[_activeSky]) layers[_activeSky].style.opacity=0;
+  _activeSky=1-_activeSky;
   const m=document.querySelector('meta[name=theme-color]'); if(m) m.setAttribute('content',t.mid);
+  try{ localStorage.setItem('wxTheme',key); }catch(e){}
 }
 window.setWeatherTheme=setWeatherTheme; // console QA helper
 // Condition snapshots — fetchers record, fetchAll decides (post-Promise.all, no race)
-let _fcNow=null,_stnNow=null,_rmNow=null;
+let _fcNow=null,_stnNow=null,_rmNow=null,_fetchGen=0;
 function aqiDesc(a){ if(a<=20)return'Good';if(a<=40)return'Fair';if(a<=60)return'Moderate';if(a<=80)return'Poor';if(a<=100)return'Very Poor';return'Extremely Poor'; }
 function soilDesc(m){ if(m<10)return'Very dry';if(m<25)return'Dry';if(m<45)return'Moist';if(m<70)return'Well watered';return'Saturated'; }
 function setStationCards(show){ ['indoorCard','stationCard','soilCard'].forEach(id=>{const e=$(id); if(e)e.style.display=show?'flex':'none';}); const rb=$('rainBreakdown'); if(rb)rb.style.display=show?'grid':'none'; }
@@ -958,7 +984,7 @@ function renderDrawer(){
 
 function pickLoc(key){
   currentLoc=key;
-  _stnNow=_rmNow=_fcNow=null; // theme snapshots are per-view; old theme persists until new data lands
+  _stnNow=_rmNow=_fcNow=null; _fetchGen++; // per-view snapshots; invalidate in-flight runs
   closeDrawer();
   const loc=locByKey(key); if(!loc) return;
   setT('topLoc',loc.top||loc.name); setT('topSub',loc.sub||'');
@@ -1005,7 +1031,7 @@ function pickCurrent(){
   closeDrawer();
   if(!navigator.geolocation){ currentLoc='current'; setT('topLoc','Current Location'); setT('topSub','Geolocation not supported'); showErr('Geolocation is not supported on this device.'); return; }
   currentLoc='current';
-  _stnNow=_rmNow=_fcNow=null;
+  _stnNow=_rmNow=_fcNow=null; _fetchGen++;
   setT('topLoc','Locating…'); setT('topSub','Getting your position…'); setT('heroTag','CURRENT');
   renderDrawer();
   navigator.geolocation.getCurrentPosition(onGeo, onGeoErr, {enableHighAccuracy:true, timeout:12000, maximumAge:120000});
@@ -1249,12 +1275,13 @@ async function fetchForecast(lat,lon,isStation){
     const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weathercode,is_day&hourly=temperature_2m,precipitation,precipitation_probability,weathercode,windspeed_10m,visibility&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=10`;
     const d=await(await fetch(url)).json();
     const now=Date.now();
-    _fcNow={code:d.current?.weathercode, isDay:d.current?.is_day===1}; // location-local day/night truth
 
     // hourly
     const hEl=$('hourly'); hEl.innerHTML='';
     let n=0; const sunrise=d.daily.sunrise[0], sunset=d.daily.sunset[0];
     const srMs=new Date(sunrise).getTime(), ssMs=new Date(sunset).getTime();
+    // theme snapshot — only from a real payload (an error body would poison it)
+    if(d.current) _fcNow={code:d.current.weathercode, isDay:d.current.is_day===1, srMs, ssMs};
     let sunInserted={sr:false,ss:false};
     for(let i=0;i<d.hourly.time.length&&n<24;i++){
       const t=new Date(d.hourly.time[i]).getTime();
@@ -1550,6 +1577,7 @@ let _histResizeT; window.addEventListener('resize',()=>{ clearTimeout(_histResiz
 
 // ── Master fetch ──
 async function fetchAll(){
+  const gen=++_fetchGen; // stale runs (older gen) must not apply their theme
   const btn=$('refreshBtn'); btn.classList.add('spin');
   const loc=locByKey(currentLoc);
   if(!loc){ btn.classList.remove('spin'); return; } // 'current' not resolved yet
@@ -1568,10 +1596,12 @@ async function fetchAll(){
   await Promise.all(tasks);
   // Theme decision happens here, after all fetchers have recorded their
   // snapshots (no fetchStation/fetchForecast race), unless ?theme= locks it.
-  if(!_themeLock){
+  // A newer run (location switch / refresh) supersedes this one entirely.
+  if(!_themeLock && gen===_fetchGen){
     if(isStation && _stnNow) setWeatherTheme(stationTheme(_stnNow,_fcNow));
     else if(_rmNow) setWeatherTheme(wmoTheme(_rmNow.code,_rmNow.isDay));
     else if(_fcNow) setWeatherTheme(wmoTheme(_fcNow.code,_fcNow.isDay));
+    else setWeatherTheme('partly-day'); // nothing fetched (e.g. coord-less station offline) → neutral
   }
   btn.classList.remove('spin');
 }
@@ -1613,11 +1643,17 @@ async function startApp(){
   }catch(e){ userLocs=[]; }
   renderDrawer();
   defaultView();              // first station, else current location
-  setInterval(fetchAll,60000);
+  _pollId=setInterval(fetchAll,60000);
 }
 
 // ── Init ──
-if(_themeLock && THEMES[_themeLock]) setWeatherTheme(_themeLock); // ?theme= QA override
+// Theme at boot: ?theme= lock wins; else restore the last real theme so night
+// users don't get a bright default flash while data loads.
+(function(){
+  let saved=null; try{ saved=localStorage.getItem('wxTheme'); }catch(e){}
+  const k=_themeLock||saved;
+  if(k && THEMES[k]) setWeatherTheme(k);
+})();
 initAuth();
 </script>
 </body>
