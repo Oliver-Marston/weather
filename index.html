@@ -28,15 +28,89 @@
   --warm: #ff8a3d;
   --cool: #2ce0d0;
   --rain: #aaddff;
+  /* Derived surfaces — literal fallbacks first so engines without color-mix keep today's blues */
+  --panel-hi: #357ab0;
+  --panel-lo: #1a4d7a;
+  --bar: rgba(45,110,160,0.5);
+  --hub: rgba(30,80,120,0.9);
+  --tip-bg: rgba(6,16,28,0.94);
+  --ink: #0b2235;
+  --panel-hi: color-mix(in srgb, var(--bg-mid) 88%, white);
+  --panel-lo: color-mix(in srgb, var(--bg-bot) 92%, black);
+  --bar: color-mix(in srgb, var(--bg-mid) 55%, transparent);
+  --hub: color-mix(in srgb, var(--bg-mid) 50%, black);
 }
+/* ── Weather theme palettes (body class set by setWeatherTheme) ── */
+.theme-clear-day    { --bg-top:#4aa3e0; --bg-mid:#2176b5; --bg-bot:#0f4d82; }
+.theme-clear-night  { --bg-top:#1c2748; --bg-mid:#111a36; --bg-bot:#080d1f; }
+.theme-partly-day   { --bg-top:#5a9ecf; --bg-mid:#2d6ea0; --bg-bot:#16456f; }
+.theme-partly-night { --bg-top:#2b3555; --bg-mid:#1b243f; --bg-bot:#0e1428; }
+.theme-overcast     { --bg-top:#67788c; --bg-mid:#46586b; --bg-bot:#283848; }
+.theme-fog          { --bg-top:#6e7b87; --bg-mid:#4d5a66; --bg-bot:#2f3a44; }
+.theme-rain-day     { --bg-top:#4a637f; --bg-mid:#33485e; --bg-bot:#1d2b3b; }
+.theme-rain-night   { --bg-top:#2b3a4e; --bg-mid:#1c2836; --bg-bot:#0f1722; }
+.theme-snow         { --bg-top:#7b8ea4; --bg-mid:#55687e; --bg-bot:#33445a; }
+.theme-storm        { --bg-top:#3d4254; --bg-mid:#282c3d; --bg-bot:#131623; }
+.theme-golden       { --bg-top:#c96f3f; --bg-mid:#8a4a5e; --bg-bot:#2b3050; }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; font-family: 'Inter', sans-serif; color: var(--text); }
 body {
   min-height: 100vh; min-height: 100dvh;
-  background: linear-gradient(165deg, var(--bg-top) 0%, var(--bg-mid) 45%, var(--bg-bot) 100%);
-  background-attachment: fixed;
+  background: var(--bg-bot); /* overscroll fallback; the gradient lives in .sky */
   overflow-x: hidden;
 }
+
+/* ── Sky (fixed background layer stack; replaces background-attachment:fixed,
+      which iOS treats as scroll and repaints badly under backdrop-filter) ── */
+.sky { position: fixed; inset: 0; height: 100lvh; z-index: -1; pointer-events: none; overflow: hidden; }
+.sky-grad { position: absolute; inset: 0; transition: opacity 1.2s ease; }
+#skyA { background: linear-gradient(165deg, var(--bg-top) 0%, var(--bg-mid) 45%, var(--bg-bot) 100%); }
+#skyB { opacity: 0; }
+.sky-fx { position: absolute; opacity: 0; transition: opacity 1.5s ease; will-change: transform, opacity; }
+.sky-glow { top: -22vh; left: 50%; width: 76vmin; height: 76vmin; margin-left: -38vmin; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,220,150,0.35), transparent 62%);
+  animation: glowPulse 24s ease-in-out infinite; }
+.sky-blob { border-radius: 50%; }
+.sky-blob--a { top: 6vh; left: -18vmin; width: 66vmin; height: 66vmin;
+  background: radial-gradient(closest-side, rgba(255,255,255,0.10), transparent 70%);
+  animation: skyDrift1 40s ease-in-out infinite; }
+.sky-blob--b { bottom: -8vh; right: -20vmin; width: 72vmin; height: 72vmin;
+  background: radial-gradient(closest-side, rgba(255,255,255,0.09), transparent 70%);
+  animation: skyDrift2 55s ease-in-out infinite; }
+.sky-stars { inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 22px 34px, rgba(255,255,255,0.8), transparent 1.5px),
+    radial-gradient(1px 1px at 121px 90px, rgba(255,255,255,0.6), transparent 1.5px),
+    radial-gradient(1.5px 1.5px at 190px 152px, rgba(255,255,255,0.7), transparent 2px),
+    radial-gradient(1px 1px at 66px 187px, rgba(255,255,255,0.5), transparent 1.5px);
+  background-size: 240px 240px, 380px 380px, 300px 300px, 340px 340px;
+  animation: twinkle 9s ease-in-out infinite; }
+.sky-rain { left: 0; right: 0; top: -100%; height: 200%;
+  background: repeating-linear-gradient(105deg, transparent 0 22px, rgba(255,255,255,0.045) 22px 23px);
+  animation: rainDrift 5.5s linear infinite; }
+@keyframes glowPulse { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.06); } }
+@keyframes skyDrift1 { 0%,100%{ transform: translate(0,0) scale(1); } 50%{ transform: translate(-46px,52px) scale(1.11); } }
+@keyframes skyDrift2 { 0%,100%{ transform: translate(0,0) scale(1); } 50%{ transform: translate(52px,-44px) scale(1.09); } }
+@keyframes twinkle { 0%,100%{ opacity: var(--stars-o,0.9); } 50%{ opacity: calc(var(--stars-o,0.9)*0.65); } }
+@keyframes rainDrift { from{ transform: translateY(0); } to{ transform: translateY(50%); } }
+/* per-theme ambient visibility */
+.theme-clear-day .sky-glow { opacity: 1; }
+.theme-partly-day .sky-glow { opacity: 0.4; }
+.theme-partly-day .sky-blob { opacity: 0.8; }
+.theme-partly-night .sky-blob { opacity: 0.4; }
+.theme-partly-night .sky-stars { opacity: 0.5; --stars-o: 0.5; }
+.theme-clear-night .sky-stars { opacity: 0.9; --stars-o: 0.9; }
+.theme-overcast .sky-blob { opacity: 1; }
+.theme-fog .sky-blob { opacity: 1; }
+.theme-rain-day .sky-blob { opacity: 0.5; }
+.theme-rain-day .sky-rain { opacity: 1; }
+.theme-rain-night .sky-stars { opacity: 0.3; --stars-o: 0.3; }
+.theme-rain-night .sky-rain { opacity: 0.7; }
+.theme-snow .sky-blob { opacity: 1; }
+.theme-storm .sky-blob { opacity: 0.8; }
+.theme-storm .sky-rain { opacity: 1; }
+.theme-golden .sky-glow { opacity: 1; }
+.theme-golden .sky-blob { opacity: 0.5; }
 
 /* ── Drawer nav ── */
 .drawer-overlay {
@@ -48,7 +122,7 @@ body {
 .drawer {
   position: fixed; top: 0; left: 0; bottom: 0; z-index: 91;
   width: 280px; max-width: 82vw;
-  background: linear-gradient(170deg, #357ab0 0%, #1a4d7a 100%);
+  background: linear-gradient(170deg, var(--panel-hi) 0%, var(--panel-lo) 100%);
   border-right: 1px solid var(--border);
   transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
   display: flex; flex-direction: column;
@@ -88,7 +162,8 @@ body {
   padding-top: calc(14px + env(safe-area-inset-top, 0px));
   padding-left: calc(18px + env(safe-area-inset-left, 0px));
   padding-right: calc(18px + env(safe-area-inset-right, 0px));
-  background: rgba(45,110,160,0.5); backdrop-filter: blur(16px);
+  background: var(--bar); backdrop-filter: blur(16px);
+  transition: background-color 1.2s ease;
   border-bottom: 1px solid var(--border);
 }
 .menu-btn { background: rgba(255,255,255,0.15); border: 1px solid var(--border); border-radius: 9px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
@@ -186,7 +261,7 @@ body {
 .hist-chart-wrap { width: 100%; position: relative; touch-action: pan-y; }
 #histChart { width: 100%; height: 210px; display: block; }
 .hist-xaxis { display: flex; justify-content: space-between; font-size: 10px; color: var(--t45); margin-top: 4px; }
-.hist-tip { position: absolute; pointer-events: none; background: rgba(8,28,48,0.94); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; font-size: 11px; line-height: 1.5; transform: translate(-50%, 0); white-space: nowrap; opacity: 0; transition: opacity 0.1s; z-index: 5; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+.hist-tip { position: absolute; pointer-events: none; background: var(--tip-bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; font-size: 11px; line-height: 1.5; transform: translate(-50%, 0); white-space: nowrap; opacity: 0; transition: opacity 0.1s; z-index: 5; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
 .hist-tip .tip-t { color: var(--t60); margin-bottom: 3px; font-weight: 600; }
 .hist-tip .tip-row { display: flex; align-items: center; gap: 6px; }
 .hist-tip .tip-row .dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -211,6 +286,7 @@ body {
 .compass-unit { text-align: center; }
 .compass-unit-label { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t45); margin-bottom: 5px; }
 .compass-svg { width: 84px; height: 84px; }
+.compass-svg .hub { fill: var(--hub); }
 .compass-dir { font-size: 12px; font-weight: 700; margin-top: 5px; }
 .compass-deg { font-size: 10px; color: var(--t60); }
 .wind-readout { flex: 1; min-width: 130px; }
@@ -238,7 +314,7 @@ body {
 /* Modal */
 .modal-overlay { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px; }
 .modal-overlay.open { display: flex; }
-.modal { background: linear-gradient(165deg,#3a7ab8,#1e5888); border: 1px solid var(--border); border-radius: 18px; padding: 24px; width: 380px; max-width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.4); }
+.modal { background: linear-gradient(165deg, var(--panel-hi), var(--panel-lo)); border: 1px solid var(--border); border-radius: 18px; padding: 24px; width: 380px; max-width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.4); }
 .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
 .modal-close { background: rgba(255,255,255,0.12); border: none; border-radius: 50%; width: 30px; height: 30px; color: #fff; font-size: 17px; cursor: pointer; }
 .modal-search-row { display: flex; gap: 8px; margin-bottom: 12px; }
@@ -276,6 +352,15 @@ select.modal-input { appearance: none; -webkit-appearance: none; }
 .drawer-signout { width: 100%; background: transparent; border: 1px solid var(--t45); border-radius: 10px; padding: 9px; color: var(--t60); font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
 .drawer-signout:hover { border-color: #fff; color: #fff; }
 
+/* ════ REDUCED MOTION ════ */
+@media (prefers-reduced-motion: reduce) {
+  .sky-fx, .sky-fx * { animation: none !important; }
+  .drawer { transition-duration: 0.01s; }
+  .scale-dot, .drow-bar-fill { transition: none; }
+  .live-dot { animation: none; }
+  /* the gradient opacity cross-fade stays — a fade is not vestibular-triggering */
+}
+
 /* ════ RESPONSIVE ════ */
 /* iPad / desktop: wider grid */
 @media (min-width: 700px) {
@@ -295,7 +380,18 @@ select.modal-input { appearance: none; -webkit-appearance: none; }
 }
 </style>
 </head>
-<body>
+<body class="theme-partly-day">
+
+<!-- Sky: fixed background layers (gradient cross-fade + ambient weather effects) -->
+<div class="sky" aria-hidden="true">
+  <div class="sky-grad" id="skyA"></div>
+  <div class="sky-grad" id="skyB"></div>
+  <div class="sky-fx sky-glow"></div>
+  <div class="sky-fx sky-blob sky-blob--a"></div>
+  <div class="sky-fx sky-blob sky-blob--b"></div>
+  <div class="sky-fx sky-stars"></div>
+  <div class="sky-fx sky-rain"></div>
+</div>
 
 <!-- SVG icon defs -->
 <svg style="display:none" xmlns="http://www.w3.org/2000/svg"><defs>
@@ -417,7 +513,7 @@ select.modal-input { appearance: none; -webkit-appearance: none; }
             <text x="78" y="46" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">E</text>
             <text x="6" y="46" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">W</text>
             <g id="needle" transform="rotate(0,42,42)"><polygon points="42,14 45.5,42 42,49 38.5,42" fill="#fff"/><polygon points="42,49 45.5,42 42,70 38.5,42" fill="rgba(255,255,255,0.25)"/></g>
-            <circle cx="42" cy="42" r="4.5" fill="rgba(30,80,120,0.9)" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
+            <circle class="hub" cx="42" cy="42" r="4.5" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
           </svg>
           <div class="compass-dir" id="wDir">--</div>
           <div class="compass-deg" id="wDeg">--°</div>
@@ -431,7 +527,7 @@ select.modal-input { appearance: none; -webkit-appearance: none; }
             <text x="78" y="46" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">E</text>
             <text x="6" y="46" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Inter">W</text>
             <g id="needle10" transform="rotate(0,42,42)"><polygon points="42,14 45.5,42 42,49 38.5,42" fill="#2ce0d0"/><polygon points="42,49 45.5,42 42,70 38.5,42" fill="rgba(44,224,208,0.2)"/></g>
-            <circle cx="42" cy="42" r="4.5" fill="rgba(30,80,120,0.9)" stroke="rgba(44,224,208,0.7)" stroke-width="1.5"/>
+            <circle class="hub" cx="42" cy="42" r="4.5" stroke="rgba(44,224,208,0.7)" stroke-width="1.5"/>
           </svg>
           <div class="compass-dir" style="color:#2ce0d0" id="wDir10">--</div>
           <div class="compass-deg" id="wDeg10">--°</div>
@@ -697,7 +793,7 @@ async function logout(){ try{ localStorage.removeItem('wxLocs'); }catch(e){} try
 function initAuth(){
   if(typeof supabase==='undefined'){ showGate('Could not load sign-in (offline?). Reconnect and reload.'); return; }
   sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{auth:{persistSession:true,autoRefreshToken:true}});
-  sb.auth.onAuthStateChange((evt,session)=>{ if(session){ _uid=session.user.id; hideGate(); startApp(); } else if(evt==='SIGNED_OUT'){ showGate(); } });
+  sb.auth.onAuthStateChange((evt,session)=>{ if(session){ _uid=session.user.id; hideGate(); startApp(); } else if(evt==='SIGNED_OUT'){ setWeatherTheme('partly-day'); showGate(); } });
   sb.auth.getSession().then(({data})=>{ if(data&&data.session){ _uid=data.session.user.id; hideGate(); startApp(); } else showGate(); });
 }
 // per-user favourite storage (cross-device)
@@ -754,6 +850,70 @@ function condLabel(rain,uv,solar,wind){ if(rain>0)return'Rain';if(uv>=8)return'B
 function wmoIcon(c){ if(c===0)return'ic-sun';if(c<=2)return'ic-partly';if(c<=3)return'ic-cloud';if(c<=49)return'ic-fog';if(c<=59)return'ic-rain';if(c<=69)return'ic-rain';if(c<=79)return'ic-snow';if(c<=82)return'ic-rain';if(c<=86)return'ic-snow';if(c<=99)return'ic-thunder';return'ic-cloud'; }
 function wmoLabel(c){ if(c===0)return'Clear sky';if(c<=2)return'Partly cloudy';if(c<=3)return'Overcast';if(c<=49)return'Fog';if(c<=59)return'Drizzle';if(c<=69)return'Rain';if(c<=79)return'Snow';if(c<=82)return'Rain showers';if(c<=86)return'Snow showers';if(c<=99)return'Thunderstorm';return'Mixed'; }
 function uvDesc(u){ if(u<=2)return'Low';if(u<=5)return'Moderate';if(u<=7)return'High';if(u<=10)return'Very High';return'Extreme'; }
+
+// ── Weather themes (background reflects the viewed location's conditions) ──
+const THEMES={
+  'clear-day':   {top:'#4aa3e0',mid:'#2176b5',bot:'#0f4d82'},
+  'clear-night': {top:'#1c2748',mid:'#111a36',bot:'#080d1f'},
+  'partly-day':  {top:'#5a9ecf',mid:'#2d6ea0',bot:'#16456f'},
+  'partly-night':{top:'#2b3555',mid:'#1b243f',bot:'#0e1428'},
+  'overcast':    {top:'#67788c',mid:'#46586b',bot:'#283848'},
+  'fog':         {top:'#6e7b87',mid:'#4d5a66',bot:'#2f3a44'},
+  'rain-day':    {top:'#4a637f',mid:'#33485e',bot:'#1d2b3b'},
+  'rain-night':  {top:'#2b3a4e',mid:'#1c2836',bot:'#0f1722'},
+  'snow':        {top:'#7b8ea4',mid:'#55687e',bot:'#33445a'},
+  'storm':       {top:'#3d4254',mid:'#282c3d',bot:'#131623'},
+  'golden':      {top:'#c96f3f',mid:'#8a4a5e',bot:'#2b3050'},
+};
+// WMO code + location-local is_day → theme key (bands mirror wmoIcon)
+function wmoTheme(c,isDay){
+  if(c==null) return isDay===false?'partly-night':'partly-day';
+  if(c===0) return isDay===false?'clear-night':'clear-day';
+  if(c<=2) return isDay===false?'partly-night':'partly-day';
+  if(c<=3) return isDay===false?'partly-night':'overcast'; // gray reads worse than navy at night
+  if(c<=49) return 'fog';
+  if(c<=69) return isDay===false?'rain-night':'rain-day';
+  if(c<=79) return 'snow';
+  if(c<=82) return isDay===false?'rain-night':'rain-day';
+  if(c<=86) return 'snow';
+  if(c<=99) return 'storm';
+  return isDay===false?'partly-night':'partly-day';
+}
+// Live station metrics refine the co-fetched forecast baseline (station has no
+// cloud sensor at night and no thunder/snow detection).
+function stationTheme(snap,fcNow){
+  const base=fcNow?wmoTheme(fcNow.code,fcNow.isDay):null;
+  if(snap.rrate>0 && base!=='storm' && base!=='snow') return (fcNow&&fcNow.isDay===false)?'rain-night':'rain-day';
+  if(base){
+    if(fcNow.isDay){
+      if(snap.solar>700||snap.uv>=8) return 'clear-day';
+      if(snap.solar<50 && base!=='fog' && base!=='storm' && base!=='snow' && base!=='rain-day') return 'overcast';
+    }
+    return base;
+  }
+  // Fallback (forecast missing): the station is physically local, so the
+  // browser clock is trustworthy here — the only place it's used.
+  const hr=new Date().getHours(), night=snap.solar<5&&(hr<6||hr>=20);
+  if(snap.rrate>0) return night?'rain-night':'rain-day';
+  if(night) return 'clear-night';
+  if(snap.solar>700||snap.uv>=8) return 'clear-day';
+  if(snap.solar<50) return 'overcast';
+  return 'partly-day';
+}
+let _activeSky=0, _curTheme='partly-day';
+const _themeLock=new URLSearchParams(location.search).get('theme');
+function setWeatherTheme(key){
+  if(!THEMES[key]||key===_curTheme) return;
+  _curTheme=key;
+  document.body.className=(document.body.className.replace(/\btheme-[\w-]+/g,'').trim()+' theme-'+key).trim();
+  const t=THEMES[key], layers=[$('skyA'),$('skyB')], back=layers[1-_activeSky];
+  back.style.background=`linear-gradient(165deg, ${t.top} 0%, ${t.mid} 45%, ${t.bot} 100%)`;
+  back.style.opacity=1; layers[_activeSky].style.opacity=0; _activeSky=1-_activeSky;
+  const m=document.querySelector('meta[name=theme-color]'); if(m) m.setAttribute('content',t.mid);
+}
+window.setWeatherTheme=setWeatherTheme; // console QA helper
+// Condition snapshots — fetchers record, fetchAll decides (post-Promise.all, no race)
+let _fcNow=null,_stnNow=null,_rmNow=null;
 function aqiDesc(a){ if(a<=20)return'Good';if(a<=40)return'Fair';if(a<=60)return'Moderate';if(a<=80)return'Poor';if(a<=100)return'Very Poor';return'Extremely Poor'; }
 function soilDesc(m){ if(m<10)return'Very dry';if(m<25)return'Dry';if(m<45)return'Moist';if(m<70)return'Well watered';return'Saturated'; }
 function setStationCards(show){ ['indoorCard','stationCard','soilCard'].forEach(id=>{const e=$(id); if(e)e.style.display=show?'flex':'none';}); const rb=$('rainBreakdown'); if(rb)rb.style.display=show?'grid':'none'; }
@@ -798,6 +958,7 @@ function renderDrawer(){
 
 function pickLoc(key){
   currentLoc=key;
+  _stnNow=_rmNow=_fcNow=null; // theme snapshots are per-view; old theme persists until new data lands
   closeDrawer();
   const loc=locByKey(key); if(!loc) return;
   setT('topLoc',loc.top||loc.name); setT('topSub',loc.sub||'');
@@ -844,6 +1005,7 @@ function pickCurrent(){
   closeDrawer();
   if(!navigator.geolocation){ currentLoc='current'; setT('topLoc','Current Location'); setT('topSub','Geolocation not supported'); showErr('Geolocation is not supported on this device.'); return; }
   currentLoc='current';
+  _stnNow=_rmNow=_fcNow=null;
   setT('topLoc','Locating…'); setT('topSub','Getting your position…'); setT('heroTag','CURRENT');
   renderDrawer();
   navigator.geolocation.getCurrentPosition(onGeo, onGeoErr, {enableHighAccuracy:true, timeout:12000, maximumAge:120000});
@@ -998,9 +1160,11 @@ async function fetchStation(creds,key){
     const inH=parseFloat(d.indoor?.humidity?.value??0);
     const feels=parseFloat(d.outdoor?.feels_like?.value??d.outdoor?.app_temp?.value??flCalc(temp,hum,ws));
     const dew=parseFloat(d.outdoor?.dew_point?.value??dp(temp,hum));
+    _stnNow={rrate,uv,solar,ws}; // theme snapshot (applied centrally in fetchAll)
+    // (icon may not have night info yet on the very first paint; fetchAll re-runs every 60s)
 
 
-    setIcon($('heroIcon'),svgCond(rrate,uv,solar,ws));
+    setIcon($('heroIcon'),svgCond(rrate,uv,solar,ws, _fcNow ? (_fcNow.isDay===false?23:12) : undefined)); // night branch now live via is_day
     $('heroTemp').innerHTML=temp.toFixed(1)+'<sup>°</sup>';
     $('heroTemp').style.color=tColor(temp);
     setT('heroCond',condLabel(rrate,uv,solar,ws));
@@ -1082,9 +1246,10 @@ async function fetchPressureTrend(creds){
 // ── Open-Meteo forecast (hourly+daily+sun) ──
 async function fetchForecast(lat,lon,isStation){
   try{
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation,precipitation_probability,weathercode,windspeed_10m,visibility&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=10`;
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weathercode,is_day&hourly=temperature_2m,precipitation,precipitation_probability,weathercode,windspeed_10m,visibility&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=10`;
     const d=await(await fetch(url)).json();
     const now=Date.now();
+    _fcNow={code:d.current?.weathercode, isDay:d.current?.is_day===1}; // location-local day/night truth
 
     // hourly
     const hEl=$('hourly'); hEl.innerHTML='';
@@ -1188,9 +1353,10 @@ function updateMoon(){
 // ── Remote location (non-home) ──
 async function fetchRemote(loc){
   try{
-    const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m,weathercode,windspeed_10m,winddirection_10m,wind_gusts_10m,surface_pressure,uv_index&timezone=auto`)).json();
+    const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m,weathercode,windspeed_10m,winddirection_10m,wind_gusts_10m,surface_pressure,uv_index,is_day&timezone=auto`)).json();
     const c=d.current;
     if(c){
+      _rmNow={code:c.weathercode, isDay:c.is_day===1}; // theme snapshot
       const temp=c.temperature_2m, hum=c.relative_humidity_2m;
       const ws=c.windspeed_10m, wd=c.winddirection_10m, gust=c.wind_gusts_10m??0;
       const feels=flCalc(temp,hum,ws); // conventional feels-like (no solar term), matches the home station
@@ -1359,7 +1525,7 @@ function histHover(clientX){
     // don't snap across data gaps: skip if the nearest point is far (> 1.5× median sample spacing)
     let med=Infinity; if(s.sp.length>1){ const dxs=[]; for(let i=1;i<s.sp.length;i++) dxs.push(s.sp[i].x-s.sp[i-1].x); dxs.sort((a,b)=>a-b); med=dxs[Math.floor(dxs.length/2)]; }
     if(Math.abs(best.x-ux)>Math.max(10,med*1.5)) return;
-    dots+=`<circle cx="${best.x.toFixed(1)}" cy="${best.y.toFixed(1)}" r="4" fill="${s.color}" stroke="#0b2235" stroke-width="1.5"/>`;
+    dots+=`<circle cx="${best.x.toFixed(1)}" cy="${best.y.toFixed(1)}" r="4" fill="${s.color}" style="stroke:var(--ink)" stroke-width="1.5"/>`;
     rows+=`<div class="tip-row"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}<b>${best.v.toFixed(_hist.cfg.dec)+_hist.cfg.unit}</b></div>`;
   });
   if(dg) dg.innerHTML=dots;
@@ -1400,11 +1566,18 @@ async function fetchAll(){
   else if(hasCoords) tasks.push(fetchRemote(loc));
   updateMoon();
   await Promise.all(tasks);
+  // Theme decision happens here, after all fetchers have recorded their
+  // snapshots (no fetchStation/fetchForecast race), unless ?theme= locks it.
+  if(!_themeLock){
+    if(isStation && _stnNow) setWeatherTheme(stationTheme(_stnNow,_fcNow));
+    else if(_rmNow) setWeatherTheme(wmoTheme(_rmNow.code,_rmNow.isDay));
+    else if(_fcNow) setWeatherTheme(wmoTheme(_fcNow.code,_fcNow.isDay));
+  }
   btn.classList.remove('spin');
 }
 
 // ── App version / updates ──
-const APP_BUILD='v19 · 2026-06-08';
+const APP_BUILD='v20 · 2026-06-08';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
@@ -1444,6 +1617,7 @@ async function startApp(){
 }
 
 // ── Init ──
+if(_themeLock && THEMES[_themeLock]) setWeatherTheme(_themeLock); // ?theme= QA override
 initAuth();
 </script>
 </body>
