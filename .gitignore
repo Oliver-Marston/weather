@@ -6,6 +6,8 @@
 # Node
 node_modules/
 
-# Temp / scratch
-.gitmsg.tmp
+# Local tooling / scratch
+screview/
+
+# Temp
 *.tmp

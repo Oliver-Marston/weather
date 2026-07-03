@@ -1,7 +1,9 @@
 {
+  "id": "/",
+  "scope": "/",
   "name": "Weathered World",
   "short_name": "Weathered",
-  "description": "Live weather dashboard for your Ecowitt station, with a year of history and trends",
+  "description": "Live weather dashboards for your own stations and favourite places, with a year of history and trends",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#16456f",

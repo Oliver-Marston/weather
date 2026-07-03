@@ -1,5 +1,13 @@
-# Netlify headers — force the HTML/manifest to revalidate so updates
-# show up in installed (Add to Home Screen) web apps without re-adding.
+# Netlify headers.
+# 1) No-cache the HTML/manifest/SW so updates reach installed PWAs promptly.
+# 2) Security headers: CSP restricts where the app can connect (the whole app
+#    is one inline script, hence script-src 'unsafe-inline').
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://xysslvzlmpgmseimqito.supabase.co https://api.ecowitt.net https://api.open-meteo.com https://geocoding-api.open-meteo.com https://air-quality-api.open-meteo.com https://api.bigdatacloud.net; frame-src https://embed.windy.com; frame-ancestors 'self'; base-uri 'self'
+
 /
   Cache-Control: no-cache
 /index.html

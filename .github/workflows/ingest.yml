@@ -28,6 +28,3 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          ECOWITT_APP_KEY: ${{ secrets.ECOWITT_APP_KEY }}
-          ECOWITT_API_KEY: ${{ secrets.ECOWITT_API_KEY }}
-          ECOWITT_MAC: ${{ secrets.ECOWITT_MAC }}

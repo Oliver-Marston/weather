@@ -579,21 +579,21 @@ select.modal-input { appearance: none; -webkit-appearance: none; }
         </div>
       </div>
     </div>
-    <!-- Indoor (home only) -->
+    <!-- Indoor (station views only) -->
     <div class="card card-fill" id="indoorCard">
       <div class="card-title"><svg stroke="currentColor"><use href="#ic-indoor"/></svg>Indoor</div>
       <div class="stat-big" id="inTemp">--°</div>
       <div class="stat-desc">Humidity: <span id="inHum">--%</span> · Dew <span id="inDew">--°</span></div>
       <div class="stat-desc">VPD: <span id="vpdVal">—</span></div>
     </div>
-    <!-- Soil moisture (home only) -->
+    <!-- Soil moisture (station views only) -->
     <div class="card card-fill" id="soilCard">
       <div class="card-title"><svg stroke="currentColor"><use href="#ic-sprout"/></svg>Soil Moisture</div>
       <div class="stat-big" id="soilVal">--%</div>
       <div id="soilDesc" style="font-size:14px;font-weight:600">—</div>
       <div class="scale-bar" style="background:linear-gradient(90deg,#c9a36a,#a3e635,#4ade80,#22d3ee)"><div class="scale-dot" id="soilDot" style="left:0%"></div></div>
     </div>
-    <!-- Station (home only) -->
+    <!-- Station (station views only) -->
     <div class="card card-fill" id="stationCard">
       <div class="card-title"><svg stroke="currentColor"><use href="#ic-battery"/></svg>Station</div>
       <div class="stat-big" style="font-size:24px" id="battVal">OK</div>
@@ -653,14 +653,9 @@ function saveLocs(l){ localStorage.setItem('wxLocs',JSON.stringify(l.filter(x=>!
 let userLocs=loadLocs(); // favourites cache for instant paint; replaced from the DB after login
 function allStations(){ return [...userStations]; }
 function allLocs(){ return [...allStations(), ...userLocs]; }
-// Push saved favourites into the DB so the 30-min logger (and history) tracks them too.
-async function syncLocations(){
-  if(!SUPABASE_URL||!SUPABASE_ANON||!userLocs.length) return;
-  try{
-    const rows=userLocs.map(l=>({key:l.key,name:l.name,sub:l.sub||null,lat:l.lat,lon:l.lon,is_home:false}));
-    await fetch(`${SUPABASE_URL}/rest/v1/locations?on_conflict=key`,{method:'POST',headers:{apikey:SUPABASE_ANON,Authorization:`Bearer ${SUPABASE_ANON}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
-  }catch(e){}
-}
+// (Favourites are registered for server-side logging by the cron, which reads
+// user_locations with the service key — the client no longer writes to the
+// shared locations table.)
 function locByKey(k){ if(k==='current') return currentGeoLoc; return allLocs().find(l=>l.key===k); }
 
 // ── Supabase client + auth (gated login, per-user favourites) ──
@@ -736,7 +731,6 @@ async function dbRemoveUserStation(key){ if(!sb) return; try{ await sb.from('use
 let currentLoc=null; // set by defaultView() after sign-in
 function isStationView(){ const l=locByKey(currentLoc); return !!(l&&l.isStation) || (currentLoc==='current'&&currentGeoLoc&&currentGeoLoc.nearStationKey); }
 let mapLayer='wind';
-let tHigh=null,tLow=null;
 
 // ── Helpers ──
 function deg2c(d){ return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(d/22.5)%16]; }
@@ -787,7 +781,7 @@ function renderDrawer(){
       <svg class="dloc-icon" stroke="currentColor"><use href="#ic-home"/></svg>
       <div class="dloc-info"><div class="dloc-name">${esc(s.name)}</div><div class="dloc-sub">${esc(s.sub||'Live station')}</div></div>
       <div class="dloc-temp" id="dt_${s.key}">--°</div>
-      ${s.key==='home'?'':`<button class="dloc-remove" onclick="removeStation(event,'${s.key}')">✕</button>`}
+      <button class="dloc-remove" onclick="removeStation(event,'${s.key}')">✕</button>
     </div>`;
   });
   h+=`<div class="drawer-sect">Favourites</div>`;
@@ -804,7 +798,6 @@ function renderDrawer(){
 
 function pickLoc(key){
   currentLoc=key;
-  tHigh=null; tLow=null; // running H/L is per-view; don't leak between stations
   closeDrawer();
   const loc=locByKey(key); if(!loc) return;
   setT('topLoc',loc.top||loc.name); setT('topSub',loc.sub||'');
@@ -885,7 +878,6 @@ function onGeoErr(err){
   showCity(DEFAULT_CITY);
 }
 function applyCurrentView(){
-  tHigh=null; tLow=null;
   const loc=currentGeoLoc, st=loc.nearStationKey;
   setT('topLoc', loc.top||loc.name); setT('topSub',loc.sub);
   setT('heroTag', (loc.name||'Current').toUpperCase());
@@ -944,19 +936,26 @@ async function doSearch(){
   try{
     const d=await(await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`)).json();
     if(!d.results?.length){ r.innerHTML='<div class="modal-note">No results found</div>'; return; }
-    r.innerHTML=d.results.map(x=>{
+    // Build rows with data-attributes + a listener — never inline handlers with
+    // external strings (a quote/angle bracket in a place name could break out).
+    r.innerHTML='';
+    d.results.forEach(x=>{
       const sub=[x.admin1,x.country].filter(Boolean).join(', ');
       const key='loc_'+x.id;
       const has=allLocs().some(l=>l.key===key);
-      return `<div class="mres"><div><div class="mres-name">${esc(x.name)}</div><div class="mres-sub">${esc(sub)}</div></div>${has?'<span style="font-size:11px;opacity:0.5">Added</span>':`<button class="mres-add" onclick="addLoc(${x.latitude},${x.longitude},'${x.name.replace(/'/g,"\\'")}','${sub.replace(/'/g,"\\'")}','${key}')">+ Add</button>`}</div>`;
-    }).join('');
+      const row=document.createElement('div'); row.className='mres';
+      row.innerHTML=`<div><div class="mres-name">${esc(x.name)}</div><div class="mres-sub">${esc(sub)}</div></div>${has?'<span style="font-size:11px;opacity:0.5">Added</span>':'<button class="mres-add">+ Add</button>'}`;
+      const btn=row.querySelector('.mres-add');
+      if(btn) btn.addEventListener('click',()=>addLoc(x.latitude,x.longitude,x.name,sub,key));
+      r.appendChild(row);
+    });
   }catch(e){ r.innerHTML='<div class="modal-note">Search failed</div>'; }
 }
 function addLoc(lat,lon,name,sub,key){
   if(allLocs().some(l=>l.key===key))return;
   const loc={key,lat,lon,name,sub,top:name};
   userLocs.push(loc);
-  saveLocs(userLocs); dbAddUserLoc(loc); syncLocations(); renderDrawer(); fetchSidebar(); closeModal();
+  saveLocs(userLocs); dbAddUserLoc(loc); renderDrawer(); fetchSidebar(); closeModal();
   setTimeout(()=>pickLoc(key),100);
 }
 
@@ -979,7 +978,7 @@ function setMapLayer(layer,btn){
 async function fetchStation(creds,key){
   try{
     if(!creds||!creds.app_key) throw new Error('No station credentials');
-    const url=`https://api.ecowitt.net/api/v3/device/real_time?application_key=${creds.app_key}&api_key=${creds.api_key}&mac=${creds.mac}&call_back=all&temp_unitid=1&pressure_unitid=3&wind_speed_unitid=7&rainfall_unitid=12&solar_irradiance_unitid=16`;
+    const url=`https://api.ecowitt.net/api/v3/device/real_time?application_key=${encodeURIComponent(creds.app_key)}&api_key=${encodeURIComponent(creds.api_key)}&mac=${encodeURIComponent(creds.mac)}&call_back=all&temp_unitid=1&pressure_unitid=3&wind_speed_unitid=7&rainfall_unitid=12&solar_irradiance_unitid=16`;
     const j=await(await fetch(url)).json();
     if(j.code!==0)throw new Error(j.msg||'Station error');
     const d=j.data;
@@ -1000,22 +999,20 @@ async function fetchStation(creds,key){
     const feels=parseFloat(d.outdoor?.feels_like?.value??d.outdoor?.app_temp?.value??flCalc(temp,hum,ws));
     const dew=parseFloat(d.outdoor?.dew_point?.value??dp(temp,hum));
 
-    if(tHigh===null||temp>tHigh)tHigh=temp;
-    if(tLow===null||temp<tLow)tLow=temp;
 
     setIcon($('heroIcon'),svgCond(rrate,uv,solar,ws));
     $('heroTemp').innerHTML=temp.toFixed(1)+'<sup>°</sup>';
     $('heroTemp').style.color=tColor(temp);
     setT('heroCond',condLabel(rrate,uv,solar,ws));
     setT('heroFeels',feels.toFixed(1)+'°'); $('heroFeels').style.color=tColor(feels);
-    setT('heroHi',(tHigh).toFixed(0)); setT('heroLo',(tLow).toFixed(0));
+    // hero H/L comes solely from fetchForecast (single source; no race)
 
     // wind
     setT('wSpd',kmh2mph(ws).toFixed(0)); setT('wKmh',ws.toFixed(1)+' km/h');
     setT('wGust',kmh2mph(wg).toFixed(0)+' mph'); setT('wGustKmh',wg.toFixed(1));
     setT('wBft',beaufort(ws));
-    setT('wDir',deg2c(wd)); setT('wDeg',wd+'°');
-    setT('wDir10',deg2c(wd10)); setT('wDeg10',wd10+'°');
+    setT('wDir',deg2c(wd)); setT('wDeg',Math.round(wd)+'°');
+    setT('wDir10',deg2c(wd10)); setT('wDeg10',Math.round(wd10)+'°');
     $('needle').setAttribute('transform',`rotate(${wd},42,42)`);
     $('needle10').setAttribute('transform',`rotate(${wd10},42,42)`);
 
@@ -1069,7 +1066,7 @@ async function fetchPressureTrend(creds){
     const pad=n=>String(n).padStart(2,'0');
     const fmt=dt=>`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}%20${pad(dt.getHours())}:${pad(dt.getMinutes())}:00`;
     const now=new Date(), start=new Date(now.getTime()-6*3600000);
-    const url=`https://api.ecowitt.net/api/v3/device/history?application_key=${creds.app_key}&api_key=${creds.api_key}&mac=${creds.mac}&start_date=${fmt(start)}&end_date=${fmt(now)}&cycle_type=30min&call_back=pressure&pressure_unitid=3`;
+    const url=`https://api.ecowitt.net/api/v3/device/history?application_key=${encodeURIComponent(creds.app_key)}&api_key=${encodeURIComponent(creds.api_key)}&mac=${encodeURIComponent(creds.mac)}&start_date=${fmt(start)}&end_date=${fmt(now)}&cycle_type=30min&call_back=pressure&pressure_unitid=3`;
     const j=await(await fetch(url)).json();
     const list=j?.data?.pressure?.relative?.list; if(!list) return;
     const pts=Object.entries(list).map(([t,v])=>[+t,parseFloat(v)]).filter(p=>!isNaN(p[1])).sort((a,b)=>a[0]-b[0]);
@@ -1083,7 +1080,7 @@ async function fetchPressureTrend(creds){
 }
 
 // ── Open-Meteo forecast (hourly+daily+sun) ──
-async function fetchForecast(lat,lon,isHome){
+async function fetchForecast(lat,lon,isStation){
   try{
     const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation,precipitation_probability,weathercode,windspeed_10m,visibility&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=10`;
     const d=await(await fetch(url)).json();
@@ -1145,13 +1142,14 @@ async function fetchForecast(lat,lon,isHome){
     if(visM!==undefined){ const visMi=(visM/1609).toFixed(0); setT('visVal',visMi+' mi'); setT('visDesc',visMi>=10?'Perfectly clear view.':visMi>=5?'Good visibility.':'Reduced visibility.'); }
 
     // if not home, fill today's precipitation from the forecast (station handles home)
-    if(!isHome && d.daily?.precipitation_sum){
+    if(!isStation && d.daily?.precipitation_sum){
       setT('precipVal',(d.daily.precipitation_sum[0]??0).toFixed(1)+' mm'); setT('precipSub','Today');
       const pp=d.daily.precipitation_probability_max[0]||0;
       setT('precipDesc',pp>0?pp+'% chance today.':'None expected today.');
     }
     // hi/lo for hero on home comes from station's running; but daily today is more useful — set if home too
-    if(isHome){ setT('heroHi',d.daily.temperature_2m_max[0].toFixed(0)); setT('heroLo',d.daily.temperature_2m_min[0].toFixed(0)); }
+    // Hero H/L: fetchForecast is the single source for every view (station or remote)
+    setT('heroHi',d.daily.temperature_2m_max[0].toFixed(0)); setT('heroLo',d.daily.temperature_2m_min[0].toFixed(0));
   }catch(e){ $('hourly').innerHTML='<div class="placeholder">Forecast unavailable</div>'; }
 }
 
@@ -1202,8 +1200,8 @@ async function fetchRemote(loc){
       setT('heroFeels',feels.toFixed(1)+'°'); $('heroFeels').style.color=tColor(feels);
       setT('wSpd',kmh2mph(ws).toFixed(0)); setT('wKmh',ws.toFixed(1)+' km/h');
       setT('wGust',kmh2mph(gust).toFixed(0)+' mph'); setT('wGustKmh',gust.toFixed(1));
-      setT('wBft',beaufort(ws)); setT('wDir',deg2c(wd)); setT('wDeg',wd+'°');
-      setT('wDir10',deg2c(wd)); setT('wDeg10',wd+'°');
+      setT('wBft',beaufort(ws)); setT('wDir',deg2c(wd)); setT('wDeg',Math.round(wd)+'°');
+      setT('wDir10',deg2c(wd)); setT('wDeg10',Math.round(wd)+'°');
       $('needle').setAttribute('transform',`rotate(${wd},42,42)`); $('needle10').setAttribute('transform',`rotate(${wd},42,42)`);
       setT('flVal',feels.toFixed(0)+'°');
       setT('flDesc',feels<temp-1?'Wind is making it feel cooler.':feels>temp+1?'Humidity is making it feel warmer.':'Similar to the actual temperature.');
@@ -1230,9 +1228,12 @@ async function quickTemp(key,lat,lon){
   }catch(e){}
 }
 async function fetchSidebar(){
-  // favourites + any station that isn't the one currently being fetched live
-  for(const l of userLocs) await quickTemp(l.key,l.lat,l.lon);
-  for(const s of allStations()){ if(s.key!==currentLoc) await quickTemp(s.key,s.lat,s.lon); }
+  // favourites + any station that isn't the one currently being fetched live — in parallel
+  const jobs=[
+    ...userLocs.map(l=>quickTemp(l.key,l.lat,l.lon)),
+    ...allStations().filter(s=>s.key!==currentLoc).map(s=>quickTemp(s.key,s.lat,s.lon)),
+  ];
+  await Promise.all(jobs);
 }
 
 // ── History charts (from Supabase) ──
@@ -1246,7 +1247,7 @@ const HIST_METRICS={
 };
 const HIST_PALETTE=['#ff8a3d','#2ce0d0','#aaddff','#facc15','#c084fc','#7de87d','#fb7185','#7dd3fc'];
 // Stable colour per location (hash of key) so adding/removing favourites never recolours others. Home is pinned.
-function locColor(key){ if(key==='home') return HIST_PALETTE[0]; let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0; return HIST_PALETTE[1+(h%(HIST_PALETTE.length-1))]; }
+function locColor(key){ let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0; return HIST_PALETTE[h%HIST_PALETTE.length]; }
 let histMetric='temp', histRange='7';
 let histLocsSel=new Set();
 let _hist=null, _histRaw=null, _histReq=0;
@@ -1258,7 +1259,7 @@ function setHistRange(r,btn){ histRange=r; document.querySelectorAll('#histRange
 function toggleHistLoc(key){ if(histLocsSel.has(key)){ if(histLocsSel.size>1) histLocsSel.delete(key); } else histLocsSel.add(key); renderHistLocs(); fetchHistory(); }
 function renderHistLocs(){
   const el=$('histLocs'); if(!el) return;
-  el.innerHTML=allLocs().map(l=>`<button class="hist-loc-chip ${histLocsSel.has(l.key)?'active':''}" onclick="toggleHistLoc('${l.key}')"><span class="hist-loc-dot" style="background:${locColor(l.key)}"></span>${esc(l.key==='home'?'Home':l.name)}</button>`).join('');
+  el.innerHTML=allLocs().map(l=>`<button class="hist-loc-chip ${histLocsSel.has(l.key)?'active':''}" onclick="toggleHistLoc('${l.key}')"><span class="hist-loc-dot" style="background:${locColor(l.key)}"></span>${esc(l.name)}</button>`).join('');
 }
 
 async function fetchHistory(){
@@ -1274,7 +1275,7 @@ async function fetchHistory(){
     const series=await Promise.all(keys.map(async key=>{
       const loc=allLocs().find(l=>l.key===key);
       const pts=await histSeries(key,since,cfg);
-      return {key,name:(key==='home'?'Home':(loc?loc.name:key)),color:locColor(key),pts};
+      return {key,name:(loc?loc.name:key),color:locColor(key),pts};
     }));
     if(myReq!==_histReq) return; // a newer request superseded this one
     const have=series.filter(s=>s.pts.length);
@@ -1283,17 +1284,14 @@ async function fetchHistory(){
   }catch(e){ clear('History unavailable.'); }
 }
 
-// Fetch one location's series: server-side downsampling RPC, with a
-// capped-query fallback (newest 1000) if the RPC isn't available yet.
+// Fetch one location's series via the server-side downsampling RPC.
+// (No raw-table fallback: raw `readings` reads are being locked down so the
+// whitelisted RPC is the only public read path.)
 async function histSeries(key,since,cfg){
   const H={apikey:SUPABASE_ANON,Authorization:`Bearer ${SUPABASE_ANON}`,'Content-Type':'application/json'};
   try{
     const r=await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_history`,{method:'POST',headers:H,body:JSON.stringify({p_location:key,p_metric:histMetric,p_since:since,p_buckets:300})});
     if(r.ok){ const d=await r.json(); if(Array.isArray(d)) return d.filter(x=>x.value!=null).map(x=>({t:new Date(x.bucket).getTime(),v:cfg.conv(x.value)})); }
-  }catch(e){}
-  try{
-    const r=await fetch(`${SUPABASE_URL}/rest/v1/readings?location_key=eq.${key}&observed_at=gte.${since}&select=observed_at,${histMetric}&order=observed_at.desc&limit=1000`,{headers:H});
-    const d=await r.json(); if(Array.isArray(d)) return d.filter(x=>x[histMetric]!=null).map(x=>({t:new Date(x.observed_at).getTime(),v:cfg.conv(x[histMetric])})).reverse();
   }catch(e){}
   return [];
 }
@@ -1339,7 +1337,7 @@ function drawHistory(seriesIn,cfg,days,selKeys){
   let leg='';
   series.forEach(s=>{ const last=s.raw[s.raw.length-1]; leg+=`<div class="hist-leg-item"><span class="dot" style="background:${s.color}"></span>${esc(s.name)} <b>${fmt(last.v)}</b></div>`; });
   if(selKeys.length===1 && series.length===1){ const vals=series[0].raw.map(p=>p.v); const avg=vals.reduce((a,b)=>a+b,0)/vals.length; leg+=`<div class="hist-stat">Min <b>${fmt(Math.min(...vals))}</b></div><div class="hist-stat">Avg <b>${fmt(avg)}</b></div><div class="hist-stat">Max <b>${fmt(Math.max(...vals))}</b></div>`; }
-  const drawn=new Set(series.map(s=>s.key)); const dropped=selKeys.filter(k=>!drawn.has(k)).map(k=>{const l=allLocs().find(x=>x.key===k);return k==='home'?'Home':(l?l.name:k);});
+  const drawn=new Set(series.map(s=>s.key)); const dropped=selKeys.filter(k=>!drawn.has(k)).map(k=>{const l=allLocs().find(x=>x.key===k);return l?l.name:k;});
   if(dropped.length) leg+=`<div class="hist-stat" style="color:var(--t45)">No data: ${dropped.join(', ')}</div>`;
   $('histSummary').innerHTML=leg;
   const opt=days<=1?{hour:'2-digit',minute:'2-digit'}:days<=30?{day:'2-digit',month:'short'}:{month:'short',year:'2-digit'};
@@ -1406,7 +1404,7 @@ async function fetchAll(){
 }
 
 // ── App version / updates ──
-const APP_BUILD='v18 · 2026-06-08';
+const APP_BUILD='v19 · 2026-06-08';
 function setBuildTag(){ const e=$('buildTag'); if(e) e.textContent='Build '+APP_BUILD; }
 
 // Refresh button: reload weather data AND check for a newer app version.
@@ -1440,9 +1438,8 @@ async function startApp(){
     userLocs = db || [];
     saveLocs(userLocs); // cache only the signed-in user's own favourites
   }catch(e){ userLocs=[]; }
-  syncLocations();
   renderDrawer();
-  defaultView();              // first station, else built-in home
+  defaultView();              // first station, else current location
   setInterval(fetchAll,60000);
 }
 
